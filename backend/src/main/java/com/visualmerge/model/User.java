@@ -1,9 +1,24 @@
 package com.visualmerge.model;
 
-import jakarta.persistence.*;
+import jakarta.persistence.Column;
+import jakarta.persistence.Entity;
+import jakarta.persistence.GeneratedValue;
+import jakarta.persistence.GenerationType;
+import jakarta.persistence.Id;
+import jakarta.persistence.PrePersist;
+import jakarta.persistence.PreUpdate;
+import jakarta.persistence.Table;
+
 import java.time.LocalDateTime;
 import java.util.UUID;
 
+/**
+ * A VisualMerge account.
+ *
+ * <p>Identity is the GitHub numeric user id, never the username: GitHub lets
+ * people rename themselves, and the email can be hidden or changed. The same
+ * GitHub account therefore always resolves to the same row here.
+ */
 @Entity
 @Table(name = "users")
 public class User {
@@ -12,12 +27,29 @@ public class User {
     @GeneratedValue(strategy = GenerationType.UUID)
     private UUID id;
 
-    @Column(nullable = false)
+    /**
+     * The GitHub numeric user id, stored as text because GitHub documents it as
+     * an opaque identifier. Unique, and null only for accounts created before
+     * GitHub identity existed — those are adopted on their next login.
+     */
+    @Column(name = "github_id", unique = true, length = 64)
+    private String githubId;
+
+    @Column(name = "github_username")
+    private String githubUsername;
+
+    /** GitHub display name. Often absent, so never required. */
+    @Column(name = "name")
     private String name;
 
-    @Column(nullable = false, unique = true)
+    /** Absent when the account keeps its email private. */
+    @Column(name = "email")
     private String email;
 
+    @Column(name = "avatar_url", length = 512)
+    private String avatarUrl;
+
+    /** Legacy column from the email/password prototype. Unused, kept nullable. */
     @Column(name = "password_hash")
     private String passwordHash;
 
@@ -33,7 +65,7 @@ public class User {
     @PrePersist
     protected void onCreate() {
         createdAt = LocalDateTime.now();
-        updatedAt = LocalDateTime.now();
+        updatedAt = createdAt;
     }
 
     @PreUpdate
@@ -41,14 +73,28 @@ public class User {
         updatedAt = LocalDateTime.now();
     }
 
-    // Getters and Setters
-
     public UUID getId() {
         return id;
     }
 
     public void setId(UUID id) {
         this.id = id;
+    }
+
+    public String getGithubId() {
+        return githubId;
+    }
+
+    public void setGithubId(String githubId) {
+        this.githubId = githubId;
+    }
+
+    public String getGithubUsername() {
+        return githubUsername;
+    }
+
+    public void setGithubUsername(String githubUsername) {
+        this.githubUsername = githubUsername;
     }
 
     public String getName() {
@@ -65,6 +111,14 @@ public class User {
 
     public void setEmail(String email) {
         this.email = email;
+    }
+
+    public String getAvatarUrl() {
+        return avatarUrl;
+    }
+
+    public void setAvatarUrl(String avatarUrl) {
+        this.avatarUrl = avatarUrl;
     }
 
     public String getPasswordHash() {
@@ -97,5 +151,13 @@ public class User {
 
     public void setUpdatedAt(LocalDateTime updatedAt) {
         this.updatedAt = updatedAt;
+    }
+
+    /** The best human label available for this account. */
+    public String displayName() {
+        if (name != null && !name.isBlank()) {
+            return name;
+        }
+        return githubUsername;
     }
 }

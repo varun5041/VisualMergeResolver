@@ -1,37 +1,36 @@
+import { Suspense, lazy } from 'react'
+import type { ReactNode } from 'react'
 import { Navigate, Route, Routes } from 'react-router-dom'
 import { useAuth } from './contexts/AuthContext'
-import { PublicLayout } from './layouts/PublicLayout'
 import { AppLayout } from './layouts/AppLayout'
-import { FlowProvider } from './state/FlowContext'
+import { PublicLayout } from './layouts/PublicLayout'
 
-// Public pages
-import { LandingPage } from './pages/LandingPage'
-import { LoginPage } from './pages/LoginPage'
-import { RegisterPage } from './pages/RegisterPage'
-
-// Authenticated pages
 import { DashboardPage } from './pages/DashboardPage'
-import { RepositoriesPage } from './pages/RepositoriesPage'
+import { LoginPage } from './pages/LoginPage'
+import { MergeSessionPage } from './pages/MergeSessionPage'
 import { NewMergePage } from './pages/NewMergePage'
+import { RepositoriesPage } from './pages/RepositoriesPage'
 import { SettingsPage } from './pages/SettingsPage'
 
-// Existing merge flow pages (preserved exactly as-is)
-import { ConnectRepository } from './pages/ConnectRepository'
-import { Analyzing } from './pages/Analyzing'
-import { ConflictOverview } from './pages/ConflictOverview'
-import { ConflictResolver } from './pages/ConflictResolver'
-import { MergeResultPage } from './pages/MergeResultPage'
+/**
+ * The landing page is the only screen with scroll choreography, and GSAP is the
+ * single largest thing the frontend depends on. Splitting it out keeps it off
+ * every authenticated route, where nothing animates and a signed-in user goes
+ * straight to the dashboard.
+ */
+const LandingPage = lazy(() =>
+  import('./pages/LandingPage').then((module) => ({ default: module.LandingPage })),
+)
 
-/** Redirects unauthenticated users to login. */
-function ProtectedRoute({ children }: { children: React.ReactNode }) {
+/** Blank while the session is being checked, so no page flashes the wrong state. */
+function ProtectedRoute({ children }: { children: ReactNode }) {
   const { isAuthenticated, isLoading } = useAuth()
   if (isLoading) return null
   if (!isAuthenticated) return <Navigate to="/login" replace />
-  return <>{children}</>
+  return <AppLayout>{children}</AppLayout>
 }
 
-/** Redirects authenticated users away from public auth pages. */
-function PublicOnlyRoute({ children }: { children: React.ReactNode }) {
+function PublicOnlyRoute({ children }: { children: ReactNode }) {
   const { isAuthenticated, isLoading } = useAuth()
   if (isLoading) return null
   if (isAuthenticated) return <Navigate to="/dashboard" replace />
@@ -41,13 +40,15 @@ function PublicOnlyRoute({ children }: { children: React.ReactNode }) {
 export default function App() {
   return (
     <Routes>
-      {/* ── Public routes ── */}
+      {/* ── Public ── */}
       <Route
         path="/"
         element={
           <PublicOnlyRoute>
             <PublicLayout>
-              <LandingPage />
+              <Suspense fallback={null}>
+                <LandingPage />
+              </Suspense>
             </PublicLayout>
           </PublicOnlyRoute>
         }
@@ -60,25 +61,15 @@ export default function App() {
           </PublicOnlyRoute>
         }
       />
-      <Route
-        path="/register"
-        element={
-          <PublicOnlyRoute>
-            <RegisterPage />
-          </PublicOnlyRoute>
-        }
-      />
+      {/* GitHub is the only way in, so registering is the same door. */}
+      <Route path="/register" element={<Navigate to="/login" replace />} />
 
-      {/* ── Authenticated routes ── */}
+      {/* ── Authenticated ── */}
       <Route
         path="/dashboard"
         element={
           <ProtectedRoute>
-            <FlowProvider>
-              <AppLayout>
-                <DashboardPage />
-              </AppLayout>
-            </FlowProvider>
+            <DashboardPage />
           </ProtectedRoute>
         }
       />
@@ -86,9 +77,7 @@ export default function App() {
         path="/repositories"
         element={
           <ProtectedRoute>
-            <AppLayout>
-              <RepositoriesPage />
-            </AppLayout>
+            <RepositoriesPage />
           </ProtectedRoute>
         }
       />
@@ -96,11 +85,15 @@ export default function App() {
         path="/merge/new"
         element={
           <ProtectedRoute>
-            <FlowProvider>
-              <AppLayout>
-                <NewMergePage />
-              </AppLayout>
-            </FlowProvider>
+            <NewMergePage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/merge/:sessionId"
+        element={
+          <ProtectedRoute>
+            <MergeSessionPage />
           </ProtectedRoute>
         }
       />
@@ -108,76 +101,11 @@ export default function App() {
         path="/settings"
         element={
           <ProtectedRoute>
-            <AppLayout>
-              <SettingsPage />
-            </AppLayout>
+            <SettingsPage />
           </ProtectedRoute>
         }
       />
 
-      {/* ── Existing merge flow routes (preserved) ── */}
-      <Route
-        path="/connect"
-        element={
-          <ProtectedRoute>
-            <FlowProvider>
-              <AppLayout>
-                <ConnectRepository />
-              </AppLayout>
-            </FlowProvider>
-          </ProtectedRoute>
-        }
-      />
-      <Route
-        path="/analyzing"
-        element={
-          <ProtectedRoute>
-            <FlowProvider>
-              <AppLayout>
-                <Analyzing />
-              </AppLayout>
-            </FlowProvider>
-          </ProtectedRoute>
-        }
-      />
-      <Route
-        path="/conflicts"
-        element={
-          <ProtectedRoute>
-            <FlowProvider>
-              <AppLayout>
-                <ConflictOverview />
-              </AppLayout>
-            </FlowProvider>
-          </ProtectedRoute>
-        }
-      />
-      <Route
-        path="/resolve"
-        element={
-          <ProtectedRoute>
-            <FlowProvider>
-              <AppLayout>
-                <ConflictResolver />
-              </AppLayout>
-            </FlowProvider>
-          </ProtectedRoute>
-        }
-      />
-      <Route
-        path="/merge"
-        element={
-          <ProtectedRoute>
-            <FlowProvider>
-              <AppLayout>
-                <MergeResultPage />
-              </AppLayout>
-            </FlowProvider>
-          </ProtectedRoute>
-        }
-      />
-
-      {/* ── Catch-all ── */}
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
   )

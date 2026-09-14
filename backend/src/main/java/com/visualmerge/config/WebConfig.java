@@ -7,7 +7,7 @@ import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
 
 /**
  * The prototype runs the Vite dev server on a different origin than Spring Boot,
- * so the mock API is opened up to the local frontend only.
+ * so the API is opened up to the local frontend only.
  */
 @Configuration
 public class WebConfig implements WebMvcConfigurer {
@@ -20,9 +20,13 @@ public class WebConfig implements WebMvcConfigurer {
 
     @Override
     public void addCorsMappings(CorsRegistry registry) {
+        // Mirrors the Spring Security CORS source so the two can never drift.
+        // Security's filter runs first and wins; this keeps the MVC layer
+        // consistent for anything that bypasses the filter chain.
         registry.addMapping("/api/**")
                 .allowedOrigins(allowedOrigins)
-                .allowedMethods("GET", "POST", "DELETE", "OPTIONS")
-                .allowedHeaders("*");
+                .allowedMethods("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS")
+                .allowedHeaders("*")
+                .allowCredentials(true);
     }
 }

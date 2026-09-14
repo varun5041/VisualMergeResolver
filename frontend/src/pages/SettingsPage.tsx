@@ -1,153 +1,128 @@
-import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
   CheckIcon,
+  ExternalLinkIcon,
   GithubIcon,
-  KeyIcon,
   LogOutIcon,
-  MailIcon,
   ShieldCheckIcon,
   UserIcon,
 } from '../components/Icons'
 import { Button, Chip, Panel, PanelHeader } from '../components/ui'
-import { cn } from '../lib/utils'
-import { useAuth } from '../contexts/AuthContext'
+import { displayName, useAuth } from '../contexts/AuthContext'
+import { formatDateTime } from '../lib/utils'
+
+function ReadOnlyField({ label, value }: { label: string; value: string | null }) {
+  return (
+    <div>
+      <p className="text-[13px] font-medium text-fg-muted">{label}</p>
+      <p className="mt-1 text-[14px] text-fg">
+        {value ?? <span className="text-fg-faint">Not shared by GitHub</span>}
+      </p>
+    </div>
+  )
+}
 
 export function SettingsPage() {
-  const { user, updateUser, logout } = useAuth()
+  const { user, logout } = useAuth()
   const navigate = useNavigate()
-  const [name, setName] = useState(user?.name ?? '')
-  const [saved, setSaved] = useState(false)
 
-  const handleSave = () => {
-    updateUser({ name })
-    setSaved(true)
-    setTimeout(() => setSaved(false), 2000)
-  }
-
-  const handleLogout = () => {
-    logout()
+  const handleLogout = async () => {
+    await logout()
     navigate('/')
   }
+
+  if (!user) return null
 
   return (
     <div className="mx-auto max-w-[800px] px-5 py-8">
       <h1 className="text-[22px] font-bold tracking-tight text-fg">Settings</h1>
-      <p className="mt-1 text-[14px] text-fg-muted">Manage your account and preferences.</p>
+      <p className="mt-1 text-[14px] text-fg-muted">Your VisualMerge account.</p>
 
-      {/* Profile */}
       <Panel className="mt-6">
         <PanelHeader
           icon={<UserIcon className="h-4.5 w-4.5 text-brand-400" />}
           title="Profile"
-          subtitle="Your account information."
+          subtitle="GitHub owns these details. Change them on GitHub and they update here on your next sign-in."
         />
-        <div className="space-y-4 p-5">
-          <div>
-            <label htmlFor="settings-name" className="mb-1.5 block text-[13px] font-medium text-fg-muted">
-              Name
-            </label>
-            <input
-              id="settings-name"
-              type="text"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              className={cn(
-                'h-10 w-full max-w-[400px] rounded-lg border border-ink-600 bg-ink-900 px-3',
-                'text-[14px] text-fg placeholder:text-fg-faint',
-                'transition outline-none focus:border-brand-400 focus:ring-2 focus:ring-brand-400/20',
+        <div className="p-5">
+          <div className="flex items-center gap-4">
+            {user.avatarUrl ? (
+              <img
+                src={user.avatarUrl}
+                alt=""
+                width={56}
+                height={56}
+                className="h-14 w-14 shrink-0 rounded-full border border-ink-700 object-cover"
+              />
+            ) : (
+              <span className="grid h-14 w-14 shrink-0 place-items-center rounded-full border border-ink-700 bg-ink-800 text-fg-muted">
+                <UserIcon className="h-6 w-6" />
+              </span>
+            )}
+            <div className="min-w-0">
+              <p className="truncate text-[16px] font-semibold text-fg">{displayName(user)}</p>
+              {user.githubUsername && (
+                <p className="truncate font-mono text-[13px] text-fg-muted">
+                  @{user.githubUsername}
+                </p>
               )}
-            />
-          </div>
-          <div>
-            <label className="mb-1.5 block text-[13px] font-medium text-fg-muted">Email</label>
-            <div className="flex items-center gap-2">
-              <MailIcon className="h-4 w-4 text-fg-faint" />
-              <span className="text-[14px] text-fg">{user?.email ?? 'Not set'}</span>
             </div>
           </div>
-          <div className="flex items-center gap-3">
-            <Button size="sm" variant="primary" onClick={handleSave}>
-              {saved ? (
-                <>
-                  <CheckIcon className="h-3.5 w-3.5" strokeWidth={3} />
-                  Saved
-                </>
-              ) : (
-                'Save changes'
-              )}
-            </Button>
+
+          <div className="mt-6 grid gap-4 sm:grid-cols-2">
+            <ReadOnlyField label="Name" value={user.name} />
+            <ReadOnlyField label="Email" value={user.email} />
+            <ReadOnlyField label="GitHub username" value={user.githubUsername} />
+            <ReadOnlyField label="GitHub user ID" value={user.githubId} />
+            <ReadOnlyField label="VisualMerge account ID" value={user.id} />
+            <ReadOnlyField label="Member since" value={formatDateTime(user.createdAt)} />
           </div>
         </div>
       </Panel>
 
-      {/* GitHub */}
-      <Panel className="mt-5">
+      <Panel className="mt-4">
         <PanelHeader
           icon={<GithubIcon className="h-4.5 w-4.5 text-fg-muted" />}
-          title="GitHub Connection"
-          subtitle="Connect your GitHub account for repository access."
-        />
-        <div className="flex items-center justify-between gap-4 p-5">
-          <div className="flex items-center gap-3">
-            {user?.githubConnected ? (
+          title="GitHub connection"
+          subtitle="How VisualMerge reaches your repositories and branches."
+          actions={
+            user.githubConnected ? (
               <Chip tone="merged">
                 <CheckIcon className="h-3 w-3" strokeWidth={3} />
                 Connected
               </Chip>
             ) : (
-              <Chip tone="neutral">Not connected</Chip>
-            )}
-            <span className="text-[13px] text-fg-muted">
-              {user?.githubConnected ? 'Your GitHub account is linked.' : 'Connect to access private repositories.'}
-            </span>
-          </div>
-          <Button size="sm" disabled={user?.githubConnected}>
-            <GithubIcon className="h-4 w-4" />
-            {user?.githubConnected ? 'Connected' : 'Connect GitHub'}
-          </Button>
-        </div>
-      </Panel>
-
-      {/* Security */}
-      <Panel className="mt-5">
-        <PanelHeader
-          icon={<ShieldCheckIcon className="h-4.5 w-4.5 text-fg-muted" />}
-          title="Security"
-          subtitle="Manage your security settings."
-        />
-        <div className="space-y-4 p-5">
-          <div className="flex items-center justify-between rounded-lg border border-ink-700 bg-ink-900/50 px-4 py-3">
-            <div className="flex items-center gap-3">
-              <KeyIcon className="h-4 w-4 text-fg-faint" />
-              <div>
-                <p className="text-[13px] font-medium text-fg">Password</p>
-                <p className="text-[12px] text-fg-faint">Change your account password</p>
-              </div>
-            </div>
-            <Button size="sm" disabled>Change password</Button>
-          </div>
-        </div>
-      </Panel>
-
-      {/* Danger zone */}
-      <Panel className="mt-5 border-danger/20">
-        <PanelHeader
-          icon={<LogOutIcon className="h-4.5 w-4.5 text-danger" />}
-          title="Danger zone"
-          subtitle="Irreversible actions."
+              <Chip tone="warn">Not connected</Chip>
+            )
+          }
         />
         <div className="space-y-3 p-5">
-          <div className="flex items-center justify-between rounded-lg border border-ink-700 bg-ink-900/50 px-4 py-3">
-            <div>
-              <p className="text-[13px] font-medium text-fg">Sign out</p>
-              <p className="text-[12px] text-fg-faint">End your current session</p>
-            </div>
-            <Button size="sm" variant="danger" onClick={handleLogout}>
-              <LogOutIcon className="h-3.5 w-3.5" />
-              Sign out
-            </Button>
-          </div>
+          <p className="flex items-start gap-2.5 text-[13px] leading-relaxed text-fg-muted">
+            <ShieldCheckIcon className="mt-0.5 h-4 w-4 shrink-0 text-merged" />
+            Your GitHub access token is held on the VisualMerge server for the length of your
+            session. It is never sent to the browser and never written to the database.
+          </p>
+          {user.githubUsername && (
+            <a
+              href={`https://github.com/${user.githubUsername}`}
+              target="_blank"
+              rel="noreferrer noopener"
+              className="inline-flex items-center gap-1.5 text-[13px] text-brand-400 transition hover:text-brand-500"
+            >
+              <ExternalLinkIcon className="h-3.5 w-3.5" />
+              View your GitHub profile
+            </a>
+          )}
+        </div>
+      </Panel>
+
+      <Panel className="mt-4">
+        <PanelHeader title="Session" subtitle="Sign out of VisualMerge on this device." />
+        <div className="p-5">
+          <Button variant="danger" onClick={() => void handleLogout()}>
+            <LogOutIcon className="h-4 w-4" />
+            Sign out
+          </Button>
         </div>
       </Panel>
     </div>

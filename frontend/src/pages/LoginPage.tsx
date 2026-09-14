@@ -1,107 +1,102 @@
-import { useState } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
-import { VisualMergeMark } from '../components/AppShell'
-import { GithubIcon, MailIcon, KeyIcon, ArrowRightIcon } from '../components/Icons'
-import { cn } from '../lib/utils'
+import { Link, useSearchParams } from 'react-router-dom'
+import { VisualMergeMark } from '../components/Logo'
+import { AlertIcon, CheckIcon, GithubIcon, ShieldCheckIcon } from '../components/Icons'
 import { useAuth } from '../contexts/AuthContext'
+import { cn } from '../lib/utils'
+
+const ASSURANCES = [
+  'VisualMerge reads the repositories your GitHub account already has.',
+  'Your GitHub token stays on the VisualMerge server. It is never sent to the browser.',
+  'Nothing is pushed, merged or opened as a pull request without you.',
+]
 
 export function LoginPage() {
-  const { login, loginWithGitHub } = useAuth()
-  const navigate = useNavigate()
-  const [email, setEmail] = useState('')
-  const [password, setPassword] = useState('')
-  const [loading, setLoading] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
-    if (!email.trim() || !password.trim()) return
-    setError(null)
-    setLoading(true)
-    try {
-      await login(email, password)
-      navigate('/dashboard')
-    } catch {
-      setError('Invalid credentials. Please try again.')
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  const handleGitHub = async () => {
-    setLoading(true)
-    try {
-      await loginWithGitHub()
-      navigate('/dashboard')
-    } catch {
-      setError('GitHub authentication failed.')
-    } finally {
-      setLoading(false)
-    }
-  }
+  const { loginWithGitHub, isLoading, error } = useAuth()
+  const [searchParams] = useSearchParams()
+  const githubFailed = searchParams.get('error') === 'github'
 
   return (
     <div className="flex min-h-screen">
-      {/* Left panel — Branding */}
+      {/* ── Left: what signing in gets you ── */}
       <div className="hidden flex-1 flex-col justify-between border-r border-ink-800 bg-ink-900/60 p-10 lg:flex">
         <Link to="/" className="flex items-center gap-2.5">
           <VisualMergeMark size={30} />
           <span className="text-[16px] font-semibold tracking-tight text-fg">VisualMerge</span>
         </Link>
 
-        <div className="max-w-[400px]">
+        <div className="max-w-[420px]">
           <h2 className="text-[28px] leading-tight font-bold tracking-tight text-fg">
             Resolve conflicts by seeing the result, not reading the diff.
           </h2>
           <p className="mt-4 text-[15px] leading-relaxed text-fg-muted">
-            VisualMerge shows you what each branch actually looks like, lets you describe
-            the result you want, and creates a verified merge.
+            VisualMerge works on your real repositories and your real branches. There is no demo
+            workspace to get lost in.
           </p>
-          <div className="mt-8 space-y-3">
-            {[
-              'See both branches as running applications',
-              'Describe what you want to keep from each',
-              'AI resolves the code, you approve the result',
-            ].map((item) => (
-              <div key={item} className="flex items-center gap-3">
-                <span className="grid h-5 w-5 shrink-0 place-items-center rounded-full bg-brand-500/20 text-brand-400">
-                  <ArrowRightIcon className="h-3 w-3" />
+          <ul className="mt-8 space-y-3">
+            {ASSURANCES.map((line) => (
+              <li key={line} className="flex items-start gap-3">
+                <span className="mt-0.5 grid h-5 w-5 shrink-0 place-items-center rounded-full bg-merged/15 text-merged">
+                  <CheckIcon className="h-3 w-3" strokeWidth={3} />
                 </span>
-                <span className="text-[13.5px] text-fg-muted">{item}</span>
-              </div>
+                <span className="text-[13.5px] leading-relaxed text-fg-muted">{line}</span>
+              </li>
             ))}
-          </div>
+          </ul>
         </div>
 
-        <p className="text-[12px] text-fg-faint">© 2026 VisualMerge</p>
+        <p className="flex items-center gap-2 text-[12.5px] text-fg-faint">
+          <ShieldCheckIcon className="h-4 w-4" />
+          GitHub handles the sign-in. VisualMerge never sees your password.
+        </p>
       </div>
 
-      {/* Right panel — Login form */}
-      <div className="flex flex-1 flex-col items-center justify-center bg-ink-950 px-5 py-10">
-        {/* Mobile logo */}
-        <Link to="/" className="mb-8 flex items-center gap-2.5 lg:hidden">
-          <VisualMergeMark size={30} />
-          <span className="text-[16px] font-semibold tracking-tight text-fg">VisualMerge</span>
-        </Link>
-
+      {/* ── Right: the one way in ── */}
+      <div className="flex flex-1 items-center justify-center px-5 py-12">
         <div className="w-full max-w-[380px]">
-          <h1 className="text-[24px] font-bold tracking-tight text-fg">Welcome back</h1>
-          <p className="mt-2 text-[14px] text-fg-muted">Continue resolving conflicts visually.</p>
+          <Link to="/" className="mb-8 flex items-center gap-2.5 lg:hidden">
+            <VisualMergeMark size={28} />
+            <span className="text-[15px] font-semibold tracking-tight text-fg">VisualMerge</span>
+          </Link>
 
-          {error && (
-            <div className="mt-4 rounded-lg border border-danger/30 bg-danger/8 px-4 py-3 text-[13px] text-danger">
-              {error}
+          <h1 className="text-[24px] font-bold tracking-tight text-fg">Sign in to VisualMerge</h1>
+          <p className="mt-2 text-[14px] text-fg-muted">
+            VisualMerge uses your GitHub account as its identity, so your repositories and branches
+            are there the moment you land.
+          </p>
+
+          {githubFailed && (
+            <div
+              role="alert"
+              className="mt-5 flex items-start gap-3 rounded-lg border border-danger/30 bg-danger/[0.06] p-4"
+            >
+              <AlertIcon className="mt-0.5 h-4.5 w-4.5 shrink-0 text-danger" />
+              <p className="text-[13px] text-fg">
+                GitHub did not complete the sign-in. Nothing was changed, so you can try again.
+              </p>
             </div>
           )}
 
-          {/* GitHub */}
+          {error && (
+            <div
+              role="alert"
+              className="mt-5 flex items-start gap-3 rounded-lg border border-warn/30 bg-warn/[0.06] p-4"
+            >
+              <AlertIcon className="mt-0.5 h-4.5 w-4.5 shrink-0 text-warn" />
+              <div>
+                <p className="text-[13px] font-medium text-fg">{error.message}</p>
+                <p className="mt-0.5 font-mono text-[11.5px] text-fg-faint">{error.code}</p>
+              </div>
+            </div>
+          )}
+
           <button
             type="button"
-            onClick={handleGitHub}
-            disabled={loading}
+            onClick={loginWithGitHub}
+            disabled={isLoading}
             className={cn(
-              'mt-6 flex h-11 w-full items-center justify-center gap-3 rounded-lg font-medium transition',
-              'border border-ink-600 bg-ink-800 text-fg hover:border-ink-500 hover:bg-ink-750',
+              'mt-6 inline-flex h-12 w-full items-center justify-center gap-2.5 rounded-xl text-[15px] font-semibold transition',
+              'bg-fg text-ink-950 hover:bg-white',
+              'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-400',
               'disabled:cursor-not-allowed disabled:opacity-50',
             )}
           >
@@ -109,86 +104,13 @@ export function LoginPage() {
             Continue with GitHub
           </button>
 
-          {/* Divider */}
-          <div className="relative my-6">
-            <div className="absolute inset-0 flex items-center">
-              <div className="w-full border-t border-ink-700" />
-            </div>
-            <div className="relative flex justify-center text-[12px]">
-              <span className="bg-ink-950 px-3 text-fg-faint">or continue with email</span>
-            </div>
-          </div>
+          <p className="mt-4 text-center text-[12.5px] leading-relaxed text-fg-faint">
+            VisualMerge asks GitHub for read access to your profile and repositories so it can list
+            them and read their branches.
+          </p>
 
-          {/* Email form */}
-          <form onSubmit={handleSubmit} className="space-y-4">
-            <div>
-              <label htmlFor="login-email" className="mb-1.5 block text-[13px] font-medium text-fg-muted">
-                Email
-              </label>
-              <div className="relative">
-                <MailIcon className="pointer-events-none absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2 text-fg-faint" />
-                <input
-                  id="login-email"
-                  type="email"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  placeholder="you@example.com"
-                  autoComplete="email"
-                  className={cn(
-                    'h-11 w-full rounded-lg border border-ink-600 bg-ink-900 pr-3 pl-10',
-                    'text-[14px] text-fg placeholder:text-fg-faint',
-                    'transition outline-none focus:border-brand-400 focus:ring-2 focus:ring-brand-400/20',
-                  )}
-                />
-              </div>
-            </div>
-
-            <div>
-              <div className="mb-1.5 flex items-center justify-between">
-                <label htmlFor="login-password" className="text-[13px] font-medium text-fg-muted">
-                  Password
-                </label>
-                <a href="#" className="text-[12px] text-brand-400 transition hover:text-brand-300">
-                  Forgot password?
-                </a>
-              </div>
-              <div className="relative">
-                <KeyIcon className="pointer-events-none absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2 text-fg-faint" />
-                <input
-                  id="login-password"
-                  type="password"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  placeholder="••••••••"
-                  autoComplete="current-password"
-                  className={cn(
-                    'h-11 w-full rounded-lg border border-ink-600 bg-ink-900 pr-3 pl-10',
-                    'text-[14px] text-fg placeholder:text-fg-faint',
-                    'transition outline-none focus:border-brand-400 focus:ring-2 focus:ring-brand-400/20',
-                  )}
-                />
-              </div>
-            </div>
-
-            <button
-              type="submit"
-              disabled={loading || !email.trim() || !password.trim()}
-              className={cn(
-                'flex h-11 w-full items-center justify-center rounded-lg font-medium transition',
-                'bg-brand-500 text-white shadow-[0_1px_0_rgba(255,255,255,0.18)_inset,0_8px_22px_-10px_rgba(91,131,240,0.9)]',
-                'hover:bg-brand-400',
-                'disabled:cursor-not-allowed disabled:opacity-50',
-              )}
-            >
-              {loading ? 'Signing in…' : 'Sign in'}
-            </button>
-          </form>
-
-          <p className="mt-6 text-center text-[13px] text-fg-muted">
-            Don't have an account?{' '}
-            <Link to="/register" className="font-medium text-brand-400 transition hover:text-brand-300">
-              Create one
-            </Link>
+          <p className="mt-8 text-center text-[13px] text-fg-muted">
+            New to VisualMerge? Signing in with GitHub creates your account.
           </p>
         </div>
       </div>

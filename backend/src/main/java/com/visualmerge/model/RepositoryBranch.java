@@ -1,9 +1,10 @@
 package com.visualmerge.model;
 
 /**
- * A real branch discovered in a cloned repository.
+ * A branch discovered by reading a cloned repository with JGit.
  *
- * <p>Distinct from {@link Branch}, which describes the mocked CauseKind demo.
+ * <p>Used by the workspace layer. Branches shown in the product come from the
+ * GitHub API instead, as {@link com.visualmerge.dto.GitHubBranchResponse}.
  */
 public record RepositoryBranch(
         String name,

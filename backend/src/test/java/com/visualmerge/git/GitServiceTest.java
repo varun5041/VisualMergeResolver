@@ -41,7 +41,7 @@ class GitServiceTest {
                     "feat(nav): add navbar");
 
             git.checkout().setName("main").call();
-            git.checkout().setCreateBranch(true).setName("feature/ganpati").call();
+            git.checkout().setCreateBranch(true).setName("feature/theme").call();
             commit(git, originPath, "src/Theme.tsx", "export const theme = 'festival';\n",
                     "feat(theme): festival theme");
 
@@ -85,7 +85,7 @@ class GitServiceTest {
         List<RepositoryBranch> branches = gitService.listBranches(clone, "main");
 
         assertThat(branches).extracting(RepositoryBranch::name)
-                .containsExactlyInAnyOrder("main", "feature/navbar", "feature/ganpati");
+                .containsExactlyInAnyOrder("main", "feature/navbar", "feature/theme");
 
         RepositoryBranch navbar = branches.stream()
                 .filter(branch -> branch.name().equals("feature/navbar"))

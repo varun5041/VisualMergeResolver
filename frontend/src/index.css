@@ -1,4 +1,11 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
+/*
+ * Developer-tool pairing: IBM Plex Sans for interface text, JetBrains Mono for
+ * everything that is literally code — branch names, commit ids, conflict
+ * markers, counts. The previous build declared JetBrains Mono as --font-mono
+ * but never loaded it, so every mono string silently fell back to a system
+ * face.
+ */
+@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap');
 @import 'tailwindcss';
 
 @theme {
@@ -31,7 +38,7 @@
   --color-danger: #f87171;
   --color-warn: #fbbf24;
 
-  --font-sans: 'Inter var', 'Segoe UI', system-ui, -apple-system, sans-serif;
+  --font-sans: 'IBM Plex Sans', 'Segoe UI', system-ui, -apple-system, sans-serif;
   --font-mono: 'JetBrains Mono', 'Cascadia Code', ui-monospace, 'SF Mono', Menlo, monospace;
 
   --animate-fade-up: fade-up 0.36s cubic-bezier(0.22, 1, 0.36, 1) both;
@@ -121,9 +128,24 @@
     -webkit-font-smoothing: antialiased;
   }
 
-  /* The app chrome is dark; the previewed website keeps its own light theme. */
   ::selection {
     background: color-mix(in srgb, var(--color-brand-500) 45%, transparent);
+  }
+
+  /*
+   * Every animation on the marketing page is decoration on top of content that
+   * is already there, so anyone who asks for less motion gets the finished
+   * state immediately rather than a slower version of the same thing.
+   */
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.001ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.001ms !important;
+      scroll-behavior: auto !important;
+    }
   }
 }
 

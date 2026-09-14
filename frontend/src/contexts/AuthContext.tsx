@@ -1,106 +1,80 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react'
 import type { ReactNode } from 'react'
-import { api } from '../services/api' // We will use a fetch wrapper, but we can also use plain fetch
-
-export interface User {
-  id: string
-  name: string
-  email: string
-  avatarUrl?: string
-  githubConnected: boolean
-}
+import { ApiError } from '../services/http'
+import { GITHUB_LOGIN_URL, authApi } from '../services/visualMergeApi'
+import type { AuthenticatedUser } from '../types/api'
 
 interface AuthContextValue {
-  user: User | null
+  user: AuthenticatedUser | null
   isAuthenticated: boolean
   isLoading: boolean
-  login: (email: string, password: string) => Promise<void>
-  loginWithGitHub: () => Promise<void>
-  register: (name: string, email: string, password: string) => Promise<void>
-  logout: () => void
-  updateUser: (patch: Partial<User>) => void
+  /** Set when the session could not be checked at all (backend down). */
+  error: ApiError | null
+  loginWithGitHub: () => void
+  logout: () => Promise<void>
+  refresh: () => Promise<void>
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null)
 
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [user, setUser] = useState<User | null>(null)
+  const [user, setUser] = useState<AuthenticatedUser | null>(null)
   const [isLoading, setIsLoading] = useState(true)
+  const [error, setError] = useState<ApiError | null>(null)
 
-  // Fetch session on mount
+  /**
+   * GET /api/auth/me is the only source of identity. A 401 simply means
+   * "signed out"; anything else is a real failure worth showing.
+   */
+  const load = useCallback(async (signal?: AbortSignal) => {
+    try {
+      const me = await authApi.me(signal)
+      setUser(me)
+      setError(null)
+    } catch (failure) {
+      if (signal?.aborted) return
+      setUser(null)
+      setError(failure instanceof ApiError && failure.status === 401 ? null : (failure as ApiError))
+    } finally {
+      if (!signal?.aborted) setIsLoading(false)
+    }
+  }, [])
+
   useEffect(() => {
-    fetch('http://localhost:8080/api/auth/me', { credentials: 'include' })
-      .then((res) => {
-        if (!res.ok) throw new Error('Not authenticated')
-        return res.json()
-      })
-      .then((data) => {
-        setUser(data as User)
-      })
-      .catch(() => {
-        setUser(null)
-      })
-      .finally(() => {
-        setIsLoading(false)
-      })
+    const controller = new AbortController()
+    void load(controller.signal)
+    return () => controller.abort()
+  }, [load])
+
+  const loginWithGitHub = useCallback(() => {
+    // A full navigation, not a fetch: GitHub's consent screen refuses to be
+    // framed or XHR'd, and the session cookie has to be set by the backend.
+    window.location.href = GITHUB_LOGIN_URL
   }, [])
 
-  const login = useCallback(async (email: string, _password: string) => {
-    // Basic email login is not fully implemented in backend yet, keeping placeholder logic for UI testing
-    const newUser: User = {
-      id: crypto.randomUUID(),
-      name: email.split('@')[0] ?? 'Developer',
-      email,
-      githubConnected: false,
+  const logout = useCallback(async () => {
+    try {
+      await authApi.logout()
+    } finally {
+      // The local session is gone either way; keeping a stale user on screen
+      // after a failed logout would be worse than signing out optimistically.
+      setUser(null)
     }
-    setUser(newUser)
   }, [])
 
-  const loginWithGitHub = useCallback(async () => {
-    // Redirect to Spring Boot OAuth2 authorization endpoint
-    window.location.href = 'http://localhost:8080/oauth2/authorization/github'
-  }, [])
-
-  const register = useCallback(async (name: string, email: string, _password: string) => {
-    // Basic email register is not fully implemented in backend yet
-    const newUser: User = {
-      id: crypto.randomUUID(),
-      name,
-      email,
-      githubConnected: false,
-    }
-    setUser(newUser)
-  }, [])
-
-  const logout = useCallback(() => {
-    fetch('http://localhost:8080/api/auth/logout', { method: 'POST', credentials: 'include' })
-      .then(() => {
-        setUser(null)
-      })
-      .catch(() => {
-        setUser(null)
-      })
-  }, [])
-
-  const updateUser = useCallback((patch: Partial<User>) => {
-    setUser((prev) => {
-      if (!prev) return prev
-      return { ...prev, ...patch }
-    })
-  }, [])
+  const refresh = useCallback(() => load(), [load])
 
   const value = useMemo<AuthContextValue>(
     () => ({
       user,
       isAuthenticated: user !== null,
       isLoading,
-      login,
+      error,
       loginWithGitHub,
-      register,
       logout,
-      updateUser,
+      refresh,
     }),
-    [user, isLoading, login, loginWithGitHub, register, logout, updateUser],
+    [user, isLoading, error, loginWithGitHub, logout, refresh],
   )
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>
@@ -110,4 +84,10 @@ export function useAuth(): AuthContextValue {
   const context = useContext(AuthContext)
   if (!context) throw new Error('useAuth must be used inside <AuthProvider>')
   return context
+}
+
+/** The label to show for an account, without ever inventing one. */
+export function displayName(user: AuthenticatedUser | null): string {
+  if (!user) return ''
+  return user.name?.trim() || user.githubUsername || 'GitHub user'
 }

@@ -1,56 +1,55 @@
 package com.visualmerge.security;
 
-import com.visualmerge.model.User;
-import com.visualmerge.repository.UserRepository;
+import com.visualmerge.service.UserService;
 import org.springframework.security.oauth2.client.userinfo.DefaultOAuth2UserService;
 import org.springframework.security.oauth2.client.userinfo.OAuth2UserRequest;
 import org.springframework.security.oauth2.core.OAuth2AuthenticationException;
 import org.springframework.security.oauth2.core.user.OAuth2User;
 import org.springframework.stereotype.Service;
 
-import java.util.Optional;
-
+/**
+ * Runs on every GitHub sign-in, after GitHub has confirmed the identity.
+ *
+ * <p>Its whole job is to make sure the GitHub account has a matching row in
+ * MySQL before the session is established. Finding, creating and updating that
+ * row is {@link UserService}'s concern; this class only translates GitHub's
+ * attributes into the call.
+ */
 @Service
 public class CustomOAuth2UserService extends DefaultOAuth2UserService {
 
-    private final UserRepository userRepository;
+    private final UserService userService;
 
-    public CustomOAuth2UserService(UserRepository userRepository) {
-        this.userRepository = userRepository;
+    public CustomOAuth2UserService(UserService userService) {
+        this.userService = userService;
     }
 
     @Override
     public OAuth2User loadUser(OAuth2UserRequest userRequest) throws OAuth2AuthenticationException {
         OAuth2User oAuth2User = super.loadUser(userRequest);
 
-        String email = oAuth2User.getAttribute("email");
-        String name = oAuth2User.getAttribute("name");
-        String login = oAuth2User.getAttribute("login"); // GitHub username
+        // GitHub's numeric id arrives as a number, so it is normalised to text
+        // rather than read with getAttribute(), which would fail the cast.
+        Object rawId = oAuth2User.getAttributes().get("id");
+        String githubId = rawId == null ? null : String.valueOf(rawId);
+        String login = attribute(oAuth2User, "login");
 
-        if (email == null) {
-            // Some users hide their public email on GitHub
-            email = login + "@users.noreply.github.com";
-        }
-
-        if (name == null || name.isEmpty()) {
-            name = login;
-        }
-
-        Optional<User> userOptional = userRepository.findByEmail(email);
-        if (userOptional.isEmpty()) {
-            User newUser = new User();
-            newUser.setEmail(email);
-            newUser.setName(name);
-            newUser.setGithubConnected(true);
-            userRepository.save(newUser);
-        } else {
-            User existingUser = userOptional.get();
-            if (!existingUser.isGithubConnected()) {
-                existingUser.setGithubConnected(true);
-                userRepository.save(existingUser);
-            }
-        }
+        userService.upsertFromGitHub(
+                githubId,
+                login,
+                attribute(oAuth2User, "name"),
+                attribute(oAuth2User, "email"),
+                attribute(oAuth2User, "avatar_url"));
 
         return oAuth2User;
+    }
+
+    /** Reads a string attribute, treating blanks as absent. */
+    private String attribute(OAuth2User user, String name) {
+        Object value = user.getAttributes().get(name);
+        if (!(value instanceof String text) || text.isBlank()) {
+            return null;
+        }
+        return text;
     }
 }

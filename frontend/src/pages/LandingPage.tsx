@@ -1,724 +1,561 @@
-import { useEffect, useRef, useState } from 'react'
+import { useRef } from 'react'
+import type { ReactNode } from 'react'
 import { Link } from 'react-router-dom'
-import { VisualMergeMark } from '../components/AppShell'
 import {
   ArrowRightIcon,
-  BoxIcon,
   CheckIcon,
-  CpuIcon,
   EyeIcon,
-  GitBranchIcon,
   GitMergeIcon,
-  GitPullRequestIcon,
-  GlobeIcon,
+  GithubIcon,
+  LockIcon,
   ShieldCheckIcon,
   SparkIcon,
-  ZapIcon,
 } from '../components/Icons'
+import { MergeScene } from '../components/MergeScene'
+import { Magnetic, Reveal, Tilt } from '../components/motion'
+import {
+  EASE,
+  FULL_MOTION,
+  gsap,
+  refreshTriggersWhenReady,
+  useGSAP,
+} from '../lib/motion'
 import { cn } from '../lib/utils'
 
-/* ── Scroll-triggered fade-in hook ── */
-function useScrollReveal() {
-  const ref = useRef<HTMLDivElement>(null)
-  const [visible, setVisible] = useState(false)
-  useEffect(() => {
-    const node = ref.current
-    if (!node) return
-    const observer = new IntersectionObserver(
-      ([entry]) => { if (entry?.isIntersecting) setVisible(true) },
-      { threshold: 0.12 },
-    )
-    observer.observe(node)
-    return () => observer.disconnect()
-  }, [])
-  return { ref, visible }
+/* ══════════════════════════════════════════════════════════════════
+   Primitives
+   ══════════════════════════════════════════════════════════════════ */
+
+/** The section label. Rationed: only three appear on the whole page. */
+function Eyebrow({ children }: { children: ReactNode }) {
+  return (
+    <p className="font-mono text-[11px] font-medium tracking-[0.2em] text-brand-400 uppercase">
+      {children}
+    </p>
+  )
 }
 
-function Section({ children, className, id }: { children: React.ReactNode; className?: string; id?: string }) {
-  const { ref, visible } = useScrollReveal()
+function SectionTitle({ children, className }: { children: ReactNode; className?: string }) {
   return (
-    <section
-      ref={ref}
-      id={id}
+    <h2
       className={cn(
-        'transition-all duration-700',
-        visible ? 'translate-y-0 opacity-100' : 'translate-y-8 opacity-0',
+        'text-[clamp(1.6rem,3.4vw,2.35rem)] leading-[1.15] font-bold tracking-tight text-fg',
         className,
       )}
     >
       {children}
+    </h2>
+  )
+}
+
+const primaryCta =
+  'inline-flex h-12 items-center justify-center gap-2.5 rounded-xl bg-brand-500 px-6 text-[15px] font-semibold text-white transition-colors ' +
+  'shadow-[0_1px_0_rgba(255,255,255,0.18)_inset,0_12px_28px_-12px_rgba(91,131,240,0.75)] ' +
+  'hover:bg-brand-400 active:translate-y-px ' +
+  'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-400'
+
+const secondaryCta =
+  'inline-flex h-12 items-center justify-center gap-2 rounded-xl border border-ink-600 bg-ink-800/60 px-6 text-[15px] font-medium text-fg transition-colors ' +
+  'hover:border-ink-500 hover:bg-ink-750 active:translate-y-px ' +
+  'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-400'
+
+/* ══════════════════════════════════════════════════════════════════
+   1. Hero — asymmetric split
+   ══════════════════════════════════════════════════════════════════ */
+
+/**
+ * The hero's visual is a real conflict, printed as text.
+ *
+ * <p>Not a mock browser window built out of grey rectangles: this is the actual
+ * thing a developer stares at, which is the whole argument the page makes. It
+ * tilts toward the pointer so it reads as an object on the page rather than a
+ * flat screenshot.
+ */
+function ConflictSpecimen() {
+  return (
+    <Tilt maxTiltDeg={6}>
+      <div className="relative">
+        <div
+          className="pointer-events-none absolute -inset-10 bg-[radial-gradient(ellipse_60%_55%_at_60%_35%,rgba(91,131,240,0.14),transparent)]"
+          aria-hidden="true"
+        />
+        <figure className="relative m-0 overflow-hidden rounded-xl border border-ink-700 bg-ink-900/70">
+          <figcaption className="flex items-center gap-3 border-b border-ink-800 px-4 py-2.5">
+            <GitMergeIcon className="h-3.5 w-3.5 text-fg-faint" aria-hidden="true" />
+            <span className="font-mono text-[11.5px] text-fg-faint">src/components/Header.tsx</span>
+            <span className="ml-auto font-mono text-[11px] text-danger">1 conflict</span>
+          </figcaption>
+          <pre className="overflow-x-auto px-4 py-4 font-mono text-[12.5px] leading-[1.75] text-fg-muted">
+            <code>
+              <span className="text-branch-a">{'<<<<<<< HEAD\n'}</span>
+              {'<Header\n  layout="compact"\n  actions={<UserMenu />}\n/>\n'}
+              <span className="text-fg-faint">{'=======\n'}</span>
+              {'<Header\n  layout="full"\n  actions={<Search /><Alerts />}\n/>\n'}
+              <span className="text-branch-b">{'>>>>>>> feature/header-v2'}</span>
+            </code>
+          </pre>
+        </figure>
+
+        {/* The question the markers cannot answer. */}
+        <div className="relative mt-4 flex flex-wrap items-center gap-3 rounded-xl border border-ink-700 bg-ink-850/70 px-4 py-3.5">
+          <EyeIcon className="h-4 w-4 shrink-0 text-brand-400" aria-hidden="true" />
+          <p className="text-[13.5px] text-fg-muted">
+            Which one is the header your users should actually see?
+          </p>
+        </div>
+      </div>
+    </Tilt>
+  )
+}
+
+function Hero() {
+  const scope = useRef<HTMLElement>(null)
+
+  useGSAP(
+    () => {
+      const media = gsap.matchMedia(scope)
+
+      media.add(FULL_MOTION, () => {
+        // On load, in reading order. The eyebrow, headline, copy and buttons
+        // arrive in the order you would read them, and the specimen follows,
+        // because the argument has to land before the evidence.
+        const intro = gsap.timeline({ defaults: { ease: EASE, duration: 0.7 } })
+        intro
+          .from('[data-hero="copy"] > *', { opacity: 0, y: 22, stagger: 0.09 })
+          .from('[data-hero="visual"]', { opacity: 0, y: 28, scale: 0.98 }, '-=0.45')
+
+        // A slow drift as the page scrolls away. Small on purpose: enough to
+        // give the two columns depth, not enough to notice as an effect.
+        const drift = gsap.to('[data-hero="visual"]', {
+          yPercent: -9,
+          ease: 'none',
+          scrollTrigger: {
+            trigger: scope.current,
+            start: 'top top',
+            end: 'bottom top',
+            scrub: 1,
+          },
+        })
+
+        return () => {
+          intro.kill()
+          drift.kill()
+        }
+      })
+
+      return () => media.revert()
+    },
+    { scope },
+  )
+
+  return (
+    <section ref={scope} className="relative overflow-hidden">
+      <div
+        className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_70%_55%_at_25%_0%,rgba(91,131,240,0.13),transparent)]"
+        aria-hidden="true"
+      />
+      <div className="relative mx-auto grid max-w-[1200px] items-center gap-12 px-5 pt-16 pb-20 md:pt-24 lg:grid-cols-[1.05fr_1fr] lg:gap-16">
+        <div data-hero="copy">
+          <Eyebrow>The visual merge layer</Eyebrow>
+
+          <h1 className="mt-5 text-[clamp(2.1rem,5vw,3.4rem)] leading-[1.06] font-bold tracking-[-0.02em] text-fg">
+            Stop reading merge conflicts.
+            <br />
+            <span className="text-brand-400">Start seeing them.</span>
+          </h1>
+
+          <p className="mt-5 max-w-[46ch] text-[clamp(0.98rem,1.6vw,1.1rem)] leading-relaxed text-fg-muted">
+            Compare what each branch actually looks like, say which parts to keep, and merge a
+            result you have already seen.
+          </p>
+
+          <div className="mt-8 flex flex-wrap items-center gap-3">
+            <Magnetic>
+              <Link to="/login" className={primaryCta}>
+                <GithubIcon className="h-[18px] w-[18px]" aria-hidden="true" />
+                Continue with GitHub
+              </Link>
+            </Magnetic>
+            <a href="#how-it-works" className={secondaryCta}>
+              See how it works
+              <ArrowRightIcon className="h-4 w-4" aria-hidden="true" />
+            </a>
+          </div>
+        </div>
+
+        <div data-hero="visual">
+          <ConflictSpecimen />
+        </div>
+      </div>
     </section>
   )
 }
 
-function SectionBadge({ children }: { children: React.ReactNode }) {
-  return (
-    <span className="inline-flex items-center gap-2 rounded-full border border-brand-400/25 bg-brand-400/8 px-3.5 py-1 text-[12px] font-medium tracking-wide text-brand-400 uppercase">
-      {children}
-    </span>
-  )
-}
+/* ══════════════════════════════════════════════════════════════════
+   2. The problem — two-column contrast
+   ══════════════════════════════════════════════════════════════════ */
 
-/* ── Animated hero product preview ── */
-function HeroPreview() {
-  const [step, setStep] = useState(0)
-  useEffect(() => {
-    const timers = [
-      setTimeout(() => setStep(1), 600),
-      setTimeout(() => setStep(2), 1200),
-      setTimeout(() => setStep(3), 2000),
-      setTimeout(() => setStep(4), 2800),
-    ]
-    return () => timers.forEach(clearTimeout)
-  }, [])
-
-  return (
-    <div className="relative mx-auto mt-12 max-w-[900px]">
-      {/* Glow */}
-      <div className="pointer-events-none absolute -inset-16 rounded-3xl bg-[radial-gradient(ellipse_60%_50%_at_50%_40%,rgba(91,131,240,0.12),transparent)]" />
-
-      {/* Branch previews row */}
-      <div className="grid gap-5 sm:grid-cols-[1fr_auto_1fr]">
-        {/* Branch A */}
-        <div
-          className={cn(
-            'rounded-xl border border-branch-a/25 bg-ink-900/80 p-0.5 transition-all duration-700',
-            step >= 1 ? 'translate-y-0 opacity-100' : 'translate-y-4 opacity-0',
-          )}
-          style={{ animationDelay: '0.1s' }}
-        >
-          <div className="flex items-center gap-2 rounded-t-[10px] border-b border-ink-800 bg-ink-900 px-3 py-2">
-            <div className="flex gap-1.5">
-              <span className="h-2 w-2 rounded-full bg-ink-600" />
-              <span className="h-2 w-2 rounded-full bg-ink-600" />
-              <span className="h-2 w-2 rounded-full bg-ink-600" />
-            </div>
-            <span className="flex-1 text-center font-mono text-[10px] text-fg-faint">Branch A</span>
-          </div>
-          <div className="space-y-2 p-3">
-            <div className="h-5 w-full rounded bg-branch-a/15" />
-            <div className="h-14 w-full rounded bg-branch-a/8 ring-1 ring-branch-a/20" />
-            <div className="grid grid-cols-3 gap-1.5">
-              <div className="h-8 rounded bg-ink-800" />
-              <div className="h-8 rounded bg-ink-800" />
-              <div className="h-8 rounded bg-ink-800" />
-            </div>
-            <div className="h-4 w-3/4 rounded bg-ink-800" />
-          </div>
-        </div>
-
-        {/* VS badge */}
-        <div className="flex items-center justify-center">
-          <span
-            className={cn(
-              'grid h-10 w-10 place-items-center rounded-full border border-ink-600 bg-ink-900 font-mono text-[13px] font-semibold text-fg-muted transition-all duration-500',
-              step >= 1 ? 'scale-100 opacity-100' : 'scale-75 opacity-0',
-            )}
-          >
-            VS
-          </span>
-        </div>
-
-        {/* Branch B */}
-        <div
-          className={cn(
-            'rounded-xl border border-branch-b/25 bg-ink-900/80 p-0.5 transition-all duration-700',
-            step >= 1 ? 'translate-y-0 opacity-100' : 'translate-y-4 opacity-0',
-          )}
-          style={{ animationDelay: '0.2s' }}
-        >
-          <div className="flex items-center gap-2 rounded-t-[10px] border-b border-ink-800 bg-ink-900 px-3 py-2">
-            <div className="flex gap-1.5">
-              <span className="h-2 w-2 rounded-full bg-ink-600" />
-              <span className="h-2 w-2 rounded-full bg-ink-600" />
-              <span className="h-2 w-2 rounded-full bg-ink-600" />
-            </div>
-            <span className="flex-1 text-center font-mono text-[10px] text-fg-faint">Branch B</span>
-          </div>
-          <div className="space-y-2 p-3">
-            <div className="h-5 w-full rounded bg-branch-b/15" />
-            <div className="h-14 w-full rounded bg-branch-b/8 ring-1 ring-branch-b/20" />
-            <div className="grid grid-cols-2 gap-1.5">
-              <div className="h-10 rounded bg-ink-800" />
-              <div className="h-10 rounded bg-ink-800" />
-            </div>
-            <div className="h-4 w-2/3 rounded bg-ink-800" />
-          </div>
-        </div>
-      </div>
-
-      {/* Arrow + instruction */}
-      <div
-        className={cn(
-          'my-5 flex flex-col items-center gap-2 transition-all duration-600',
-          step >= 2 ? 'translate-y-0 opacity-100' : 'translate-y-4 opacity-0',
-        )}
-      >
-        <div className="h-6 w-px bg-gradient-to-b from-transparent via-fg-faint to-transparent" />
-        <span className="rounded-full border border-ink-700 bg-ink-900 px-4 py-1.5 text-[12px] text-fg-muted">
-          Tell us what you want
-        </span>
-        <div className="h-6 w-px bg-gradient-to-b from-transparent via-fg-faint to-transparent" />
-      </div>
-
-      {/* Merged result */}
-      <div
-        className={cn(
-          'rounded-xl border border-merged/25 bg-ink-900/80 p-0.5 transition-all duration-700',
-          step >= 3 ? 'translate-y-0 opacity-100' : 'translate-y-4 opacity-0',
-        )}
-      >
-        <div className="flex items-center gap-2 rounded-t-[10px] border-b border-ink-800 bg-ink-900 px-3 py-2">
-          <div className="flex gap-1.5">
-            <span className="h-2 w-2 rounded-full bg-merged/50" />
-            <span className="h-2 w-2 rounded-full bg-ink-600" />
-            <span className="h-2 w-2 rounded-full bg-ink-600" />
-          </div>
-          <span className="flex-1 text-center font-mono text-[10px] text-fg-faint">Merged Result</span>
-          {step >= 4 && (
-            <span className="flex items-center gap-1 rounded-full bg-merged/15 px-2 py-0.5 text-[10px] font-medium text-merged">
-              <CheckIcon className="h-3 w-3" strokeWidth={3} />
-              Verified
-            </span>
-          )}
-        </div>
-        <div className="space-y-2 p-3">
-          <div className="h-5 w-full rounded bg-merged/10 ring-1 ring-merged/15" />
-          <div className="h-14 w-full rounded bg-merged/6" />
-          <div className="grid grid-cols-3 gap-1.5">
-            <div className="h-8 rounded bg-ink-800" />
-            <div className="h-8 rounded bg-ink-800" />
-            <div className="h-8 rounded bg-ink-800" />
-          </div>
-          <div className="flex items-center gap-2">
-            <div className="h-4 flex-1 rounded bg-ink-800" />
-            <div className="flex items-center gap-1 text-[10px] text-merged">
-              <SparkIcon className="h-3 w-3" />
-              AI combined the best of A + B
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-  )
-}
-
-/* ── Feature cards data ── */
-const features = [
-  { icon: EyeIcon, title: 'Visual Branch Comparison', description: 'See both branches as running applications, not lines of code.' },
-  { icon: SparkIcon, title: 'AI Conflict Resolution', description: 'Describe the result you want. AI resolves the code to match.' },
-  { icon: GitBranchIcon, title: 'Real Git Integration', description: 'Works with your actual GitHub repositories and branches.' },
-  { icon: GlobeIcon, title: 'Browser Previews', description: 'Each branch renders as a real, interactive web page.' },
-  { icon: ShieldCheckIcon, title: 'Visual Verification', description: 'The merged build is checked before anything is committed.' },
-  { icon: GitPullRequestIcon, title: 'GitHub PR Workflow', description: 'Create pull requests directly from verified merges.' },
-  { icon: BoxIcon, title: 'Isolated Execution', description: 'Every build runs in its own sandboxed environment.' },
-  { icon: CheckIcon, title: 'Human Approval', description: 'AI proposes. You approve. Nothing merges without your sign-off.' },
+const GIT_SHOWS = [
+  'Line-level, so a whole redesign reads as a wall of noise',
+  'No indication of what either version renders as',
+  'Correctness is guessed, then found out in review',
 ]
 
-const howItWorksSteps = [
-  { step: '01', title: 'Connect your repository', description: 'Link a GitHub repository. VisualMerge clones it into an isolated workspace.', icon: GitBranchIcon },
-  { step: '02', title: 'See both versions', description: 'Each branch builds and renders as a live web page you can interact with.', icon: EyeIcon },
-  { step: '03', title: 'Describe the result you want', description: '"Keep the navbar from A, the cards from B." Tell VisualMerge what to combine.', icon: SparkIcon },
-  { step: '04', title: 'Verify the merged application', description: 'The merged build is tested, verified visually, and ready for a PR.', icon: ShieldCheckIcon },
+const VISUALMERGE_SHOWS = [
+  'Component-level, so you judge the thing users touch',
+  'Each branch builds and renders as a real page',
+  'The merged build is verified before anything is committed',
 ]
 
-/* ── Main landing page ── */
-export function LandingPage() {
+function TheProblem() {
   return (
-    <div className="overflow-hidden">
-      {/* ═══════════════ HERO ═══════════════ */}
-      <div className="relative">
-        <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_80%_60%_at_50%_-10%,rgba(91,131,240,0.14),transparent)]" />
-        <div className="mx-auto max-w-[1200px] px-5 pb-20 pt-20 text-center md:pt-28">
-          <SectionBadge>The visual merge layer for AI-generated code</SectionBadge>
-
-          <h1 className="mt-6 text-[clamp(2rem,5.5vw,3.75rem)] leading-[1.08] font-extrabold tracking-tight text-fg">
-            Stop reading merge conflicts.{' '}
-            <br className="hidden sm:block" />
-            <span className="bg-gradient-to-r from-brand-400 to-[#a78bfa] bg-clip-text text-transparent">
-              Start seeing them.
-            </span>
-          </h1>
-
-          <p className="mx-auto mt-5 max-w-[600px] text-[clamp(0.95rem,1.8vw,1.12rem)] leading-relaxed text-fg-muted">
-            Compare what each branch actually looks like, tell VisualMerge what you want to keep,
-            and let AI create a verified merge.
+    <section id="product" className="border-t border-white/[0.05]">
+      <div className="mx-auto max-w-[1200px] px-5 py-20 md:py-24">
+        <Reveal as="div" className="max-w-[54ch]">
+          <SectionTitle>
+            Git tells you which lines disagree. It never tells you which result is right.
+          </SectionTitle>
+          <p className="mt-4 text-[15px] leading-relaxed text-fg-muted">
+            Conflict markers describe an edit. The decision you are actually making is about the
+            product: which navigation, which layout, which behaviour ships.
           </p>
+        </Reveal>
 
-          <div className="mt-8 flex flex-wrap items-center justify-center gap-3">
-            <Link
-              to="/register"
-              className={cn(
-                'inline-flex h-12 items-center gap-2.5 rounded-xl px-6 text-[15px] font-semibold transition',
-                'bg-brand-500 text-white shadow-[0_1px_0_rgba(255,255,255,0.18)_inset,0_12px_28px_-10px_rgba(91,131,240,0.7)]',
-                'hover:bg-brand-400 hover:shadow-[0_1px_0_rgba(255,255,255,0.18)_inset,0_16px_36px_-10px_rgba(91,131,240,0.8)]',
-              )}
-            >
-              Start resolving conflicts
-              <ArrowRightIcon className="h-4.5 w-4.5" />
-            </Link>
-            <a
-              href="#how-it-works"
-              className="inline-flex h-12 items-center gap-2 rounded-xl border border-ink-600 bg-ink-800/60 px-6 text-[15px] font-medium text-fg transition hover:border-ink-500 hover:bg-ink-750"
-            >
-              See how it works
-            </a>
-          </div>
-
-          <HeroPreview />
-        </div>
-      </div>
-
-      {/* ═══════════════ SECTION 1: THE PROBLEM ═══════════════ */}
-      <Section id="product" className="mx-auto max-w-[1200px] px-5 py-24">
-        <div className="text-center">
-          <SectionBadge>The problem</SectionBadge>
-          <h2 className="mt-5 text-[clamp(1.5rem,3.5vw,2.5rem)] leading-tight font-bold tracking-tight text-fg">
-            Git shows you the conflict.{' '}
-            <br className="hidden sm:block" />
-            VisualMerge shows you the outcome.
-          </h2>
-        </div>
-
-        <div className="mt-14 grid gap-6 lg:grid-cols-2">
-          {/* Traditional */}
-          <div className="rounded-xl border border-danger/20 bg-ink-900/60 p-6">
-            <div className="mb-4 flex items-center gap-2">
-              <span className="h-2 w-2 rounded-full bg-danger" />
-              <span className="text-[13px] font-semibold text-danger">Traditional merge conflict</span>
-            </div>
-            <pre className="overflow-x-auto rounded-lg bg-ink-950 p-4 font-mono text-[12px] leading-relaxed text-fg-muted">
-              <code>{`<<<<<<< HEAD
-<nav class="navbar-dark">
-  <Logo variant="compact" />
-  <UserMenu />
-</nav>
-=======
-<nav class="navbar-brand">
-  <Logo variant="full" />
-  <SearchBar />
-  <NotificationBell />
-</nav>
->>>>>>> feature/redesign`}</code>
-            </pre>
-            <p className="mt-3 text-[13px] text-fg-faint">You read code. You guess what it looks like.</p>
-          </div>
-
-          {/* VisualMerge */}
-          <div className="rounded-xl border border-merged/20 bg-ink-900/60 p-6">
-            <div className="mb-4 flex items-center gap-2">
-              <span className="h-2 w-2 rounded-full bg-merged" />
-              <span className="text-[13px] font-semibold text-merged">VisualMerge resolution</span>
-            </div>
-            <div className="grid grid-cols-3 gap-2">
-              {['Branch A', 'Branch B', 'Merged'].map((label, i) => (
-                <div
-                  key={label}
-                  className={cn(
-                    'rounded-lg border p-3',
-                    i === 0 && 'border-branch-a/25 bg-branch-a/5',
-                    i === 1 && 'border-branch-b/25 bg-branch-b/5',
-                    i === 2 && 'border-merged/25 bg-merged/5',
-                  )}
-                >
-                  <div className={cn(
-                    'mb-2 h-3 w-full rounded',
-                    i === 0 && 'bg-branch-a/20',
-                    i === 1 && 'bg-branch-b/20',
-                    i === 2 && 'bg-merged/20',
-                  )} />
-                  <div className="space-y-1.5">
-                    <div className="h-6 w-full rounded bg-ink-800" />
-                    <div className="h-4 w-3/4 rounded bg-ink-800" />
-                    <div className="h-4 w-1/2 rounded bg-ink-800" />
-                  </div>
-                  <p className={cn(
-                    'mt-2 text-center text-[10px] font-medium',
-                    i === 0 && 'text-branch-a',
-                    i === 1 && 'text-branch-b',
-                    i === 2 && 'text-merged',
-                  )}>{label}</p>
-                </div>
+        <Reveal
+          as="div"
+          stagger={0.12}
+          className="mt-12 grid gap-px overflow-hidden rounded-xl border border-ink-700 bg-ink-700 md:grid-cols-2"
+        >
+          <div className="group bg-ink-900/80 p-6 transition-colors hover:bg-ink-900">
+            <p className="font-mono text-[11.5px] tracking-[0.14em] text-danger uppercase">
+              What Git shows you
+            </p>
+            <p className="mt-4 text-[15px] leading-relaxed text-fg">
+              Two blocks of text and a marker between them.
+            </p>
+            <ul className="mt-5 space-y-2.5">
+              {GIT_SHOWS.map((line) => (
+                <li key={line} className="flex gap-3 text-[13.5px] leading-relaxed text-fg-muted">
+                  <span
+                    className="mt-2.5 h-px w-3 shrink-0 bg-ink-500 transition-[width] duration-300 group-hover:w-5"
+                    aria-hidden="true"
+                  />
+                  {line}
+                </li>
               ))}
-            </div>
-            <p className="mt-3 text-[13px] text-fg-faint">You see the result. You approve what you see.</p>
-          </div>
-        </div>
-      </Section>
-
-      {/* ═══════════════ SECTION 2: HOW IT WORKS ═══════════════ */}
-      <Section id="how-it-works" className="border-t border-white/[0.04] bg-ink-900/30 py-24">
-        <div className="mx-auto max-w-[1200px] px-5">
-          <div className="text-center">
-            <SectionBadge>How it works</SectionBadge>
-            <h2 className="mt-5 text-[clamp(1.5rem,3.5vw,2.5rem)] leading-tight font-bold tracking-tight text-fg">
-              Four steps from conflict to merge
-            </h2>
+            </ul>
           </div>
 
-          <div className="mt-14 grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
-            {howItWorksSteps.map((item) => (
-              <div key={item.step} className="group rounded-xl border border-ink-700 bg-ink-850/60 p-5 transition hover:border-ink-600 hover:bg-ink-800/60">
-                <span className="font-mono text-[28px] font-bold text-brand-400/60">{item.step}</span>
-                <div className="mt-3 grid h-10 w-10 place-items-center rounded-lg border border-ink-700 bg-ink-900 text-fg-muted transition group-hover:border-brand-400/30 group-hover:text-brand-400">
-                  <item.icon className="h-5 w-5" />
-                </div>
-                <h3 className="mt-3 text-[14px] font-semibold text-fg">{item.title}</h3>
-                <p className="mt-1.5 text-[13px] leading-relaxed text-fg-muted">{item.description}</p>
-              </div>
-            ))}
+          <div className="group bg-ink-900/80 p-6 transition-colors hover:bg-ink-900">
+            <p className="font-mono text-[11.5px] tracking-[0.14em] text-merged uppercase">
+              What VisualMerge shows you
+            </p>
+            <p className="mt-4 text-[15px] leading-relaxed text-fg">
+              Both branches running, side by side, and the result before you take it.
+            </p>
+            <ul className="mt-5 space-y-2.5">
+              {VISUALMERGE_SHOWS.map((line) => (
+                <li key={line} className="flex gap-3 text-[13.5px] leading-relaxed text-fg-muted">
+                  <CheckIcon
+                    className="mt-1 h-3.5 w-3.5 shrink-0 text-merged transition-transform duration-300 group-hover:scale-110"
+                    strokeWidth={3}
+                    aria-hidden="true"
+                  />
+                  {line}
+                </li>
+              ))}
+            </ul>
           </div>
-        </div>
-      </Section>
+        </Reveal>
+      </div>
+    </section>
+  )
+}
 
-      {/* ═══════════════ SECTION 3: CORE DIFFERENTIATOR ═══════════════ */}
-      <Section className="mx-auto max-w-[1200px] px-5 py-24">
-        <div className="text-center">
-          <SectionBadge>Visual resolution</SectionBadge>
-          <h2 className="mt-5 text-[clamp(1.5rem,3.5vw,2.5rem)] leading-tight font-bold tracking-tight text-fg">
-            Code tells you what changed.{' '}
-            <br className="hidden sm:block" />
-            The browser tells you what matters.
-          </h2>
-          <p className="mx-auto mt-4 max-w-[520px] text-[15px] text-fg-muted">
-            Select which visual elements to keep from each branch. VisualMerge resolves the code to match your choices.
-          </p>
-        </div>
+/* ══════════════════════════════════════════════════════════════════
+   3. How it works — rail that fills with scroll progress
+   ══════════════════════════════════════════════════════════════════ */
 
-        <div className="mt-12 rounded-xl border border-ink-700 bg-ink-900/60 p-6">
-          <div className="flex items-center gap-2 pb-4 text-[12px] font-semibold text-fg-faint uppercase tracking-wider">
-            <EyeIcon className="h-4 w-4" />
-            Visual component selection
-          </div>
-          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
-            {[
-              { name: 'Navbar', source: 'Branch A', tone: 'a' as const },
-              { name: 'Hero', source: 'Combined', tone: 'merged' as const },
-              { name: 'Cards', source: 'Branch B', tone: 'b' as const },
-              { name: 'Buttons', source: 'Branch A', tone: 'a' as const },
-              { name: 'Forms', source: 'Branch B', tone: 'b' as const },
-            ].map((item) => (
-              <div
-                key={item.name}
-                className={cn(
-                  'rounded-lg border p-3 transition hover:scale-[1.02]',
-                  item.tone === 'a' && 'border-branch-a/25 bg-branch-a/5',
-                  item.tone === 'b' && 'border-branch-b/25 bg-branch-b/5',
-                  item.tone === 'merged' && 'border-merged/25 bg-merged/5',
-                )}
-              >
-                <div className={cn(
-                  'h-10 w-full rounded bg-ink-800/60',
-                )} />
-                <p className="mt-2 text-[12px] font-medium text-fg">{item.name}</p>
-                <p className={cn(
-                  'text-[11px] font-medium',
-                  item.tone === 'a' && 'text-branch-a',
-                  item.tone === 'b' && 'text-branch-b',
-                  item.tone === 'merged' && 'text-merged',
-                )}>{item.source}</p>
-              </div>
-            ))}
-          </div>
-        </div>
-      </Section>
+const STEPS = [
+  {
+    title: 'Sign in with GitHub',
+    body: 'VisualMerge reads the repositories your account already has access to. There is nothing to import and no demo workspace.',
+  },
+  {
+    title: 'Pick a repository and two branches',
+    body: 'Repositories, branches and default branches all come live from GitHub, so the list is exactly what you would see there.',
+  },
+  {
+    title: 'See both versions running',
+    body: 'Each branch builds and renders as a page you can click through, next to the base branch it is merging into.',
+  },
+  {
+    title: 'Say what the result should be',
+    body: 'Keep the navigation from one branch and the layout from the other. VisualMerge resolves the code to match that choice.',
+  },
+  {
+    title: 'Verify, then merge',
+    body: 'The merged build is tested and rendered before it becomes a commit. Nothing lands without your approval.',
+  },
+]
 
-      {/* ═══════════════ SECTION 4: AI + HUMAN CONTROL ═══════════════ */}
-      <Section className="border-t border-white/[0.04] bg-ink-900/30 py-24">
-        <div className="mx-auto max-w-[1200px] px-5">
-          <div className="text-center">
-            <SectionBadge>AI + Human Control</SectionBadge>
-            <h2 className="mt-5 text-[clamp(1.5rem,3.5vw,2.5rem)] leading-tight font-bold tracking-tight text-fg">
-              AI does the merge.{' '}
-              <br className="hidden sm:block" />
-              You decide the result.
-            </h2>
-          </div>
+function HowItWorks() {
+  const scope = useRef<HTMLElement>(null)
 
-          <div className="mx-auto mt-12 grid max-w-[800px] gap-6 lg:grid-cols-2">
-            {/* Instruction */}
-            <div className="rounded-xl border border-ink-700 bg-ink-850/80 p-5">
-              <div className="flex items-center gap-2 text-[12px] font-semibold text-fg-faint uppercase tracking-wider">
-                <UserIconSmall />
-                Your instruction
-              </div>
-              <div className="mt-3 rounded-lg border border-ink-600 bg-ink-950 p-3">
-                <p className="text-[13px] leading-relaxed text-fg">
-                  "Keep the navbar from A, the pricing cards from B, and combine the hero section."
+  useGSAP(
+    () => {
+      const media = gsap.matchMedia(scope)
+
+      media.add(FULL_MOTION, () => {
+        // The rail fills as you read, so scroll position doubles as a progress
+        // indicator through the five steps.
+        const fill = gsap.fromTo(
+          '[data-rail-fill]',
+          { scaleY: 0 },
+          {
+            scaleY: 1,
+            ease: 'none',
+            scrollTrigger: {
+              trigger: '[data-rail]',
+              start: 'top 70%',
+              end: 'bottom 80%',
+              scrub: 0.8,
+            },
+          },
+        )
+
+        // Each step arrives just before its marker is reached.
+        const steps = gsap.from('[data-step]', {
+          opacity: 0,
+          x: -18,
+          duration: 0.55,
+          ease: EASE,
+          stagger: 0.12,
+          scrollTrigger: { trigger: '[data-rail]', start: 'top 75%' },
+        })
+
+        return () => {
+          fill.kill()
+          steps.kill()
+        }
+      })
+
+      return () => media.revert()
+    },
+    { scope },
+  )
+
+  return (
+    <section
+      ref={scope}
+      id="how-it-works"
+      className="border-t border-white/[0.05] bg-ink-900/30"
+    >
+      <div className="mx-auto max-w-[1200px] px-5 py-20 md:py-24">
+        <Reveal as="div" className="max-w-[46ch]">
+          <SectionTitle>From two branches to one verified result</SectionTitle>
+        </Reveal>
+
+        <ol data-rail className="relative mt-12 max-w-[760px]">
+          {/* The rail track and the part of it you have read. */}
+          <span
+            className="absolute top-5 bottom-10 left-[17px] w-px bg-ink-700 sm:left-[19px]"
+            aria-hidden="true"
+          />
+          <span
+            data-rail-fill
+            className="absolute top-5 bottom-10 left-[17px] w-px origin-top bg-gradient-to-b from-brand-400 to-merged sm:left-[19px]"
+            aria-hidden="true"
+          />
+
+          {STEPS.map((step, index) => (
+            <li key={step.title} data-step className="relative flex gap-5 pb-9 last:pb-0 sm:gap-7">
+              <span className="relative z-10 grid h-9 w-9 shrink-0 place-items-center rounded-full border border-ink-600 bg-ink-900 font-mono text-[12.5px] font-semibold text-brand-400 transition-colors duration-300 hover:border-brand-400 sm:h-10 sm:w-10">
+                {index + 1}
+              </span>
+              <div className="pt-1.5">
+                <h3 className="text-[15.5px] font-semibold text-fg">{step.title}</h3>
+                <p className="mt-1.5 max-w-[58ch] text-[13.5px] leading-relaxed text-fg-muted">
+                  {step.body}
                 </p>
               </div>
-              <div className="mt-3 flex items-center gap-2 rounded-lg border border-brand-400/20 bg-brand-400/8 px-3 py-2">
-                <SparkIcon className="h-4 w-4 text-brand-400" />
-                <span className="text-[13px] font-medium text-brand-400">Merge plan created</span>
-              </div>
-            </div>
-
-            {/* Verification */}
-            <div className="rounded-xl border border-ink-700 bg-ink-850/80 p-5">
-              <div className="flex items-center gap-2 text-[12px] font-semibold text-fg-faint uppercase tracking-wider">
-                <ShieldCheckIcon className="h-4 w-4" />
-                Verification
-              </div>
-              <div className="mt-3 space-y-2">
-                {[
-                  'Applied',
-                  'Build passed',
-                  'Preview passed',
-                  'Visual verification passed',
-                ].map((check) => (
-                  <div key={check} className="flex items-center gap-2.5 rounded-lg border border-merged/20 bg-merged/6 px-3 py-2">
-                    <CheckIcon className="h-4 w-4 text-merged" strokeWidth={3} />
-                    <span className="text-[13px] text-fg">{check}</span>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
-
-          <div className="mx-auto mt-8 max-w-[600px] text-center">
-            <p className="text-[15px] font-medium text-fg">
-              AI proposes. You approve. VisualMerge verifies.
-            </p>
-            <p className="mt-2 text-[13px] text-fg-muted">
-              Nothing is merged without your explicit approval and automated verification.
-            </p>
-          </div>
-        </div>
-      </Section>
-
-      {/* ═══════════════ SECTION 5: BUILT FOR AI CODING ═══════════════ */}
-      <Section className="mx-auto max-w-[1200px] px-5 py-24">
-        <div className="grid items-center gap-12 lg:grid-cols-2">
-          <div>
-            <SectionBadge>The AI coding era</SectionBadge>
-            <h2 className="mt-5 text-[clamp(1.5rem,3.5vw,2.25rem)] leading-tight font-bold tracking-tight text-fg">
-              Built for the way software is written now.
-            </h2>
-            <p className="mt-4 text-[15px] leading-relaxed text-fg-muted">
-              AI coding agents generate changes faster than ever. But when multiple agents work in parallel,
-              they create merge conflicts that are harder to reason about than human-written code.
-            </p>
-            <p className="mt-3 text-[15px] leading-relaxed text-fg-muted">
-              VisualMerge lets you understand those changes visually — instead of manually reading
-              through hundreds of lines of AI-generated diffs.
-            </p>
-          </div>
-          <div className="rounded-xl border border-ink-700 bg-ink-900/60 p-6">
-            <div className="space-y-3">
-              {[
-                { agent: 'Agent 1', action: 'Redesigned navigation component', branch: 'feature/nav-redesign' },
-                { agent: 'Agent 2', action: 'Added pricing page with cards', branch: 'feature/pricing' },
-                { agent: 'Agent 3', action: 'Refactored shared layout module', branch: 'feature/layout-v2' },
-              ].map((item) => (
-                <div key={item.agent} className="flex items-center gap-3 rounded-lg border border-ink-700 bg-ink-850/60 px-4 py-3">
-                  <CpuIcon className="h-4 w-4 shrink-0 text-brand-400" />
-                  <div className="min-w-0 flex-1">
-                    <p className="text-[13px] font-medium text-fg">{item.action}</p>
-                    <p className="truncate font-mono text-[11px] text-fg-faint">{item.branch}</p>
-                  </div>
-                </div>
-              ))}
-              <div className="flex items-center gap-2 rounded-lg border border-danger/25 bg-danger/8 px-4 py-3">
-                <ZapIcon className="h-4 w-4 text-danger" />
-                <span className="text-[13px] font-medium text-danger">3 conflicting changes detected</span>
-              </div>
-              <div className="flex items-center gap-2 rounded-lg border border-merged/25 bg-merged/8 px-4 py-3">
-                <GitMergeIcon className="h-4 w-4 text-merged" />
-                <span className="text-[13px] font-medium text-merged">VisualMerge resolves them visually</span>
-              </div>
-            </div>
-          </div>
-        </div>
-      </Section>
-
-      {/* ═══════════════ SECTION 6: FEATURE GRID ═══════════════ */}
-      <Section id="features" className="border-t border-white/[0.04] bg-ink-900/30 py-24">
-        <div className="mx-auto max-w-[1200px] px-5">
-          <div className="text-center">
-            <SectionBadge>Features</SectionBadge>
-            <h2 className="mt-5 text-[clamp(1.5rem,3.5vw,2.5rem)] leading-tight font-bold tracking-tight text-fg">
-              Everything you need to merge with confidence
-            </h2>
-          </div>
-
-          <div className="mt-14 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-            {features.map((feature) => (
-              <div
-                key={feature.title}
-                className="group rounded-xl border border-ink-700 bg-ink-850/60 p-5 transition hover:border-ink-600 hover:bg-ink-800/40"
-              >
-                <div className="grid h-10 w-10 place-items-center rounded-lg border border-ink-700 bg-ink-900 text-fg-muted transition group-hover:border-brand-400/30 group-hover:text-brand-400">
-                  <feature.icon className="h-5 w-5" />
-                </div>
-                <h3 className="mt-3 text-[14px] font-semibold text-fg">{feature.title}</h3>
-                <p className="mt-1.5 text-[13px] leading-relaxed text-fg-muted">{feature.description}</p>
-              </div>
-            ))}
-          </div>
-        </div>
-      </Section>
-
-      {/* ═══════════════ SECTION 7: PRODUCT SHOWCASE ═══════════════ */}
-      <Section className="mx-auto max-w-[1200px] px-5 py-24">
-        <div className="text-center">
-          <SectionBadge>The product</SectionBadge>
-          <h2 className="mt-5 text-[clamp(1.5rem,3.5vw,2.5rem)] leading-tight font-bold tracking-tight text-fg">
-            A complete visual merge workspace
-          </h2>
-        </div>
-
-        <div className="mt-12 rounded-xl border border-ink-700 bg-ink-900/60 p-1">
-          {/* Mock toolbar */}
-          <div className="flex items-center gap-3 rounded-t-[10px] border-b border-ink-800 bg-ink-900 px-4 py-2.5">
-            <div className="flex gap-1.5">
-              <span className="h-2.5 w-2.5 rounded-full bg-ink-600" />
-              <span className="h-2.5 w-2.5 rounded-full bg-ink-600" />
-              <span className="h-2.5 w-2.5 rounded-full bg-ink-600" />
-            </div>
-            <div className="flex items-center gap-2">
-              <VisualMergeMark size={18} />
-              <span className="text-[12px] font-medium text-fg-muted">VisualMerge</span>
-              <span className="text-[11px] text-fg-faint">/</span>
-              <span className="font-mono text-[12px] text-fg-faint">causekind/causekind-web</span>
-            </div>
-            <div className="ml-auto flex items-center gap-2">
-              <span className="inline-flex items-center gap-1.5 rounded-md border border-danger/30 bg-danger/10 px-2 py-0.5 text-[10px] font-medium text-danger">
-                2 conflicts
-              </span>
-              <span className="inline-flex items-center gap-1.5 rounded-md border border-merged/30 bg-merged/10 px-2 py-0.5 text-[10px] font-medium text-merged">
-                <CheckIcon className="h-2.5 w-2.5" strokeWidth={3} />
-                Verified
-              </span>
-            </div>
-          </div>
-
-          {/* Mock product content */}
-          <div className="grid gap-3 p-4 lg:grid-cols-[1fr_1fr_280px]">
-            {/* Branch A preview */}
-            <div className="rounded-lg border border-branch-a/20 bg-ink-900/40 p-3">
-              <div className="flex items-center justify-between pb-2">
-                <span className="inline-flex items-center gap-1.5 text-[11px] font-medium text-branch-a">
-                  <GitBranchIcon className="h-3 w-3" />
-                  feature/ganpati
-                </span>
-                <span className="text-[10px] text-fg-faint">Branch A</span>
-              </div>
-              <div className="space-y-1.5">
-                <div className="h-4 w-full rounded bg-branch-a/10" />
-                <div className="h-12 w-full rounded bg-ink-800" />
-                <div className="grid grid-cols-3 gap-1">
-                  <div className="h-6 rounded bg-ink-800" />
-                  <div className="h-6 rounded bg-ink-800" />
-                  <div className="h-6 rounded bg-ink-800" />
-                </div>
-              </div>
-            </div>
-
-            {/* Branch B preview */}
-            <div className="rounded-lg border border-branch-b/20 bg-ink-900/40 p-3">
-              <div className="flex items-center justify-between pb-2">
-                <span className="inline-flex items-center gap-1.5 text-[11px] font-medium text-branch-b">
-                  <GitBranchIcon className="h-3 w-3" />
-                  feature/donation-flow
-                </span>
-                <span className="text-[10px] text-fg-faint">Branch B</span>
-              </div>
-              <div className="space-y-1.5">
-                <div className="h-4 w-full rounded bg-branch-b/10" />
-                <div className="h-12 w-full rounded bg-ink-800" />
-                <div className="grid grid-cols-2 gap-1">
-                  <div className="h-8 rounded bg-ink-800" />
-                  <div className="h-8 rounded bg-ink-800" />
-                </div>
-              </div>
-            </div>
-
-            {/* Side panel */}
-            <div className="space-y-3">
-              {/* AI Resolution */}
-              <div className="rounded-lg border border-ink-700 bg-ink-850/60 p-3">
-                <div className="flex items-center gap-2 text-[11px] font-semibold text-brand-400">
-                  <SparkIcon className="h-3.5 w-3.5" />
-                  AI Resolution
-                </div>
-                <div className="mt-2 space-y-1.5">
-                  <div className="h-3 w-full rounded bg-ink-800" />
-                  <div className="h-3 w-3/4 rounded bg-ink-800" />
-                </div>
-              </div>
-
-              {/* Merged preview */}
-              <div className="rounded-lg border border-merged/20 bg-merged/5 p-3">
-                <div className="flex items-center gap-2 text-[11px] font-semibold text-merged">
-                  <GitMergeIcon className="h-3.5 w-3.5" />
-                  Merged Preview
-                </div>
-                <div className="mt-2 space-y-1.5">
-                  <div className="h-4 rounded bg-merged/10" />
-                  <div className="h-8 rounded bg-ink-800" />
-                </div>
-              </div>
-
-              {/* Verification */}
-              <div className="rounded-lg border border-ink-700 bg-ink-850/60 p-3">
-                <div className="flex items-center gap-2 text-[11px] font-semibold text-fg-muted">
-                  <ShieldCheckIcon className="h-3.5 w-3.5" />
-                  Verification
-                </div>
-                <div className="mt-2 space-y-1">
-                  {['Build', 'Preview', 'Visual'].map((check) => (
-                    <div key={check} className="flex items-center gap-2 text-[10px]">
-                      <CheckIcon className="h-3 w-3 text-merged" strokeWidth={3} />
-                      <span className="text-fg-muted">{check} passed</span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </Section>
-
-      {/* ═══════════════ SECTION 8: FINAL CTA ═══════════════ */}
-      <section className="border-t border-white/[0.04] bg-ink-900/30 py-24">
-        <div className="mx-auto max-w-[700px] px-5 text-center">
-          <h2 className="text-[clamp(1.5rem,3.5vw,2.5rem)] leading-tight font-bold tracking-tight text-fg">
-            Your merge conflict shouldn't be a puzzle.
-          </h2>
-          <p className="mt-4 text-[16px] text-fg-muted">
-            See both versions. Describe the result. Ship with confidence.
-          </p>
-          <div className="mt-8 flex flex-wrap items-center justify-center gap-3">
-            <Link
-              to="/register"
-              className={cn(
-                'inline-flex h-12 items-center gap-2.5 rounded-xl px-6 text-[15px] font-semibold transition',
-                'bg-brand-500 text-white shadow-[0_1px_0_rgba(255,255,255,0.18)_inset,0_12px_28px_-10px_rgba(91,131,240,0.7)]',
-                'hover:bg-brand-400',
-              )}
-            >
-              Start resolving conflicts
-              <ArrowRightIcon className="h-4.5 w-4.5" />
-            </Link>
-            <Link
-              to="/login"
-              className="inline-flex h-12 items-center gap-2 rounded-xl border border-ink-600 bg-ink-800/60 px-6 text-[15px] font-medium text-fg transition hover:border-ink-500 hover:bg-ink-750"
-            >
-              Explore VisualMerge
-            </Link>
-          </div>
-        </div>
-      </section>
-    </div>
+            </li>
+          ))}
+        </ol>
+      </div>
+    </section>
   )
 }
 
-/* Small user icon used inline in the AI section */
-function UserIconSmall() {
+/* ══════════════════════════════════════════════════════════════════
+   5. Where the product is — grouped status list
+   ══════════════════════════════════════════════════════════════════ */
+
+const SHIPPED = [
+  'GitHub sign-in, with your GitHub account as your VisualMerge identity',
+  'Your real repositories and branches, read live from GitHub',
+  'Merge sessions saved to a hosted MySQL database and kept across sign-ins',
+]
+
+const IN_PROGRESS = [
+  'Building both branches and rendering them side by side',
+  'Component-level conflict detection',
+  'Describing the result you want, and verified merges',
+]
+
+/**
+ * An honest status section.
+ *
+ * <p>The visual engine is not built yet, and a landing page that implies
+ * otherwise would be the same lie as a demo repository. Saying so costs nothing
+ * and is the difference between a product and a mockup.
+ */
+function WhereItIs() {
   return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.7} strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4" aria-hidden="true">
-      <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
-      <circle cx="12" cy="7" r="4" />
-    </svg>
+    <section className="border-t border-white/[0.05] bg-ink-900/30">
+      <div className="mx-auto max-w-[1200px] px-5 py-20 md:py-24">
+        <Reveal as="div" className="max-w-[50ch]">
+          <SectionTitle>Where VisualMerge actually is</SectionTitle>
+          <p className="mt-4 text-[15px] leading-relaxed text-fg-muted">
+            The identity and repository layer is live today. The visual engine is the next piece.
+          </p>
+        </Reveal>
+
+        <Reveal as="div" stagger={0.14} className="mt-12 grid gap-10 md:grid-cols-2 md:gap-14">
+          <div>
+            <div className="flex items-center gap-2.5 border-b border-ink-700 pb-3">
+              <CheckIcon className="h-4 w-4 text-merged" strokeWidth={3} aria-hidden="true" />
+              <h3 className="text-[14px] font-semibold text-fg">Working now</h3>
+            </div>
+            <ul className="mt-4 space-y-3.5">
+              {SHIPPED.map((item) => (
+                <li key={item} className="text-[13.5px] leading-relaxed text-fg-muted">
+                  {item}
+                </li>
+              ))}
+            </ul>
+          </div>
+
+          <div>
+            <div className="flex items-center gap-2.5 border-b border-ink-700 pb-3">
+              <SparkIcon className="h-4 w-4 text-brand-400" aria-hidden="true" />
+              <h3 className="text-[14px] font-semibold text-fg">Being built</h3>
+            </div>
+            <ul className="mt-4 space-y-3.5">
+              {IN_PROGRESS.map((item) => (
+                <li key={item} className="text-[13.5px] leading-relaxed text-fg-faint">
+                  {item}
+                </li>
+              ))}
+            </ul>
+          </div>
+        </Reveal>
+      </div>
+    </section>
+  )
+}
+
+/* ══════════════════════════════════════════════════════════════════
+   6. Principles — offset two-column
+   ══════════════════════════════════════════════════════════════════ */
+
+const PRINCIPLES = [
+  {
+    icon: ShieldCheckIcon,
+    title: 'Nothing merges without you',
+    body: 'VisualMerge proposes a resolution and verifies it. Taking it is always an explicit action, never a side effect of opening a page.',
+  },
+  {
+    icon: LockIcon,
+    title: 'Your GitHub token stays on the server',
+    body: 'The browser holds a session cookie and nothing else. Access is re-checked against GitHub on every request, so revoking VisualMerge on GitHub revokes it here.',
+  },
+  {
+    icon: EyeIcon,
+    title: 'No invented data, anywhere',
+    body: 'Every repository, branch, session and count is read from GitHub or from the database. When there is nothing yet, the screen says so instead of filling itself in.',
+  },
+]
+
+function Principles() {
+  return (
+    <section id="features" className="border-t border-white/[0.05]">
+      <div className="mx-auto max-w-[1200px] px-5 py-20 md:py-24">
+        <div className="grid gap-10 lg:grid-cols-[minmax(0,0.8fr)_minmax(0,1.2fr)] lg:gap-16">
+          <Reveal as="div">
+            <Eyebrow>Principles</Eyebrow>
+            <SectionTitle className="mt-5">
+              A merge tool has to be trustworthy before it is clever
+            </SectionTitle>
+          </Reveal>
+
+          <Reveal as="div" stagger={0.1} className="divide-y divide-ink-700">
+            {PRINCIPLES.map((principle) => (
+              <div
+                key={principle.title}
+                className="group flex gap-5 py-6 first:pt-0 last:pb-0"
+              >
+                <span className="grid h-10 w-10 shrink-0 place-items-center rounded-lg border border-ink-700 bg-ink-900 text-fg-muted transition-[color,border-color,transform] duration-300 group-hover:-translate-y-0.5 group-hover:border-brand-400/40 group-hover:text-brand-400">
+                  <principle.icon className="h-[18px] w-[18px]" aria-hidden="true" />
+                </span>
+                <div>
+                  <h3 className="text-[15px] font-semibold text-fg">{principle.title}</h3>
+                  <p className="mt-1.5 max-w-[62ch] text-[13.5px] leading-relaxed text-fg-muted">
+                    {principle.body}
+                  </p>
+                </div>
+              </div>
+            ))}
+          </Reveal>
+        </div>
+      </div>
+    </section>
+  )
+}
+
+/* ══════════════════════════════════════════════════════════════════
+   7. Close
+   ══════════════════════════════════════════════════════════════════ */
+
+function Close() {
+  return (
+    <section className="border-t border-white/[0.05] bg-ink-900/30">
+      <Reveal as="div" className="mx-auto max-w-[640px] px-5 py-20 text-center md:py-28">
+        <h2 className="text-[clamp(1.6rem,3.4vw,2.35rem)] leading-[1.15] font-bold tracking-tight text-fg">
+          Your merge conflict should not be a puzzle.
+        </h2>
+        <p className="mx-auto mt-4 max-w-[44ch] text-[15.5px] leading-relaxed text-fg-muted">
+          Sign in with GitHub and VisualMerge is looking at your real repositories within seconds.
+        </p>
+        <div className="mt-8 flex justify-center">
+          <Magnetic>
+            <Link to="/login" className={primaryCta}>
+              <GithubIcon className="h-[18px] w-[18px]" aria-hidden="true" />
+              Continue with GitHub
+            </Link>
+          </Magnetic>
+        </div>
+      </Reveal>
+    </section>
+  )
+}
+
+/* ══════════════════════════════════════════════════════════════════ */
+
+export function LandingPage() {
+  // Fonts and images settle after ScrollTrigger has measured, which would
+  // otherwise leave the pinned scene starting at the wrong scroll position.
+  useGSAP(() => refreshTriggersWhenReady(), [])
+
+  return (
+    <div className="overflow-hidden">
+      <Hero />
+      <TheProblem />
+      <HowItWorks />
+      <MergeScene />
+      <WhereItIs />
+      <Principles />
+      <Close />
+    </div>
   )
 }
