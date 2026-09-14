@@ -11,6 +11,7 @@ import {
   SparkIcon,
 } from '../components/Icons'
 import { Button, Chip, Mono, Panel, PanelHeader } from '../components/ui'
+import { cn } from '../lib/utils'
 import { api } from '../services/api'
 import { useFlow } from '../state/FlowContext'
 import { demoProject } from '../data/mockData'
@@ -105,16 +106,66 @@ export function Dashboard() {
               <SparkIcon className="h-3.5 w-3.5" />
               AI-assisted visual merges
             </Chip>
-            <Chip tone="neutral">Prototype · mock repository data</Chip>
+            <Chip tone="neutral">Real repositories · demo mode</Chip>
           </div>
         </div>
 
-        <Panel className="mt-9 animate-fade-up">
+        {/* Two ways in: a real repository, or the bundled demo. */}
+        <div className="mt-9 grid gap-4 md:grid-cols-2">
+          <button
+            type="button"
+            onClick={() => navigate('/connect')}
+            className={cn(
+              'group rounded-xl border border-merged/30 bg-merged/6 p-5 text-left transition',
+              'hover:-translate-y-0.5 hover:border-merged/50 hover:bg-merged/10',
+            )}
+          >
+            <div className="flex items-center justify-between gap-3">
+              <span className="flex items-center gap-2.5">
+                <span className="grid h-8 w-8 place-items-center rounded-lg border border-merged/30 bg-merged/10 text-merged">
+                  <GitBranchIcon className="h-4 w-4" />
+                </span>
+                <span className="text-[15px] font-semibold text-fg">Real Repository</span>
+              </span>
+              <Chip tone="merged">Live</Chip>
+            </div>
+            <p className="mt-3 text-[13px] leading-relaxed text-fg-muted">
+              Connect a public GitHub repository. VisualMerge clones it into an isolated workspace
+              and reads its real branches.
+            </p>
+            <span className="mt-4 inline-flex items-center gap-1.5 text-[13px] font-medium text-merged">
+              Connect Repository
+              <ArrowRightIcon className="h-3.5 w-3.5 transition group-hover:translate-x-0.5" />
+            </span>
+          </button>
+
+          <div className="rounded-xl border border-ink-700 bg-ink-850/60 p-5">
+            <div className="flex items-center justify-between gap-3">
+              <span className="flex items-center gap-2.5">
+                <span className="grid h-8 w-8 place-items-center rounded-lg border border-ink-600 bg-ink-900 text-fg-muted">
+                  <SparkIcon className="h-4 w-4" />
+                </span>
+                <span className="text-[15px] font-semibold text-fg">Demo Mode</span>
+              </span>
+              <Chip tone="warn">Mock data</Chip>
+            </div>
+            <p className="mt-3 text-[13px] leading-relaxed text-fg-muted">
+              The CauseKind walkthrough below runs on built-in sample data, so you can see the whole
+              resolution experience end to end.
+            </p>
+            <span className="mt-4 inline-flex items-center gap-1.5 text-[13px] text-fg-faint">
+              Already loaded below
+            </span>
+          </div>
+        </div>
+
+        <Panel className="mt-5 animate-fade-up">
           <PanelHeader
             icon={<GitMergeIcon className="h-4.5 w-4.5 text-brand-400" />}
             title={
               <span className="flex items-center gap-2.5">
                 {active.name}
+                <Chip tone="warn">Demo Mode</Chip>
                 <Chip tone="neutral">{active.language}</Chip>
               </span>
             }

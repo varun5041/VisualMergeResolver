@@ -1,6 +1,5 @@
 import { useEffect, useState } from 'react'
 import type { ReactNode } from 'react'
-import { Link } from 'react-router-dom'
 import { getApiMode, onApiModeChange } from '../services/api'
 import type { ApiMode } from '../services/api'
 import { cn } from '../lib/utils'
@@ -38,57 +37,58 @@ function useApiMode(): ApiMode {
   return mode
 }
 
+/**
+ * Application shell for the merge-flow screens.
+ *
+ * When rendered inside AppLayout (which provides its own sidebar + topbar), this
+ * component renders only a thin sub-header with progress steps and repo badge —
+ * no duplicate logo or navigation.
+ */
 export function AppShell({
   step,
   children,
   contentClassName,
+  repositoryLabel = 'causekind/causekind-web',
 }: {
   step?: FlowStepId
   children: ReactNode
   contentClassName?: string
+  /** Repository shown in the header. Pass null to hide it. */
+  repositoryLabel?: string | null
 }) {
   const mode = useApiMode()
 
   return (
-    <div className="app-grid-bg min-h-screen">
-      <header className="sticky top-0 z-40 border-b border-ink-800 bg-ink-950/85 backdrop-blur-md">
-        <div className="mx-auto flex h-14 max-w-[1440px] items-center gap-5 px-5">
-          <Link to="/" className="flex shrink-0 items-center gap-2.5">
-            <VisualMergeMark />
-            <div className="leading-none">
-              <span className="text-[15px] font-semibold tracking-tight text-fg">VisualMerge</span>
-              <span className="mt-1 hidden text-[11.5px] text-fg-faint lg:block">
-                Resolve conflicts by seeing the result, not reading the diff.
-              </span>
+    <div className="min-h-full">
+      {/* Sub-header with progress steps and status badges */}
+      {step && (
+        <header className="sticky top-0 z-30 border-b border-ink-800 bg-ink-950/85 backdrop-blur-md">
+          <div className="mx-auto flex h-12 max-w-[1560px] items-center gap-5 px-5">
+            <div className="flex-1 overflow-x-auto">
+              <ProgressSteps current={step} />
             </div>
-          </Link>
 
-          <div className="mx-auto hidden xl:block">{step ? <ProgressSteps current={step} /> : null}</div>
-
-          <div className="ml-auto flex items-center gap-2.5">
-            <Chip tone="neutral" className="hidden sm:inline-flex">
-              <span className="font-mono">causekind/causekind-web</span>
-            </Chip>
-            <Chip tone={mode === 'live' ? 'merged' : 'warn'}>
-              <span
-                className={cn(
-                  'h-1.5 w-1.5 rounded-full',
-                  mode === 'live' ? 'bg-merged' : 'bg-warn',
-                )}
-              />
-              {mode === 'live' ? 'API connected' : 'Offline mock data'}
-            </Chip>
+            <div className="flex shrink-0 items-center gap-2.5">
+              {repositoryLabel ? (
+                <Chip tone="neutral" className="hidden sm:inline-flex">
+                  <span className="font-mono">{repositoryLabel}</span>
+                </Chip>
+              ) : null}
+              <Chip tone={mode === 'live' ? 'merged' : 'warn'}>
+                <span
+                  className={cn(
+                    'h-1.5 w-1.5 rounded-full',
+                    mode === 'live' ? 'bg-merged' : 'bg-warn',
+                  )}
+                />
+                {mode === 'live' ? 'API connected' : 'Offline mock data'}
+              </Chip>
+            </div>
           </div>
-        </div>
+        </header>
+      )}
 
-        {step ? (
-          <div className="mx-auto max-w-[1440px] border-t border-ink-800/70 px-5 py-2 xl:hidden">
-            <ProgressSteps current={step} />
-          </div>
-        ) : null}
-      </header>
-
-      <main className={cn('mx-auto max-w-[1440px] px-5 py-8', contentClassName)}>{children}</main>
+      <div className={cn('mx-auto max-w-[1560px] px-5 py-6', contentClassName)}>{children}</div>
     </div>
   )
 }
